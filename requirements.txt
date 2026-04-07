@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pydantic-settings
+authlib
+python-jose[cryptography]
+passlib[bcrypt]
+boto3
+groq
+anthropic
+weasyprint
+httpx
+itsdangerous
+fastapi-mail
