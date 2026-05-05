@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from datetime import datetime, timedelta
 from app.database import get_db
 from app.core.auth import oauth
@@ -18,8 +19,54 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 import uuid
 
+from app.core.dependencies import get_current_user
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+@router.get("/me")
+async def get_me(request: Request, db = Depends(get_db)):
+    access_token = request.cookies.get("access_token")
+    if access_token:
+        from app.core.security import verify_token
+        payload = verify_token(access_token)
+        if payload and payload.get("type") == "access":
+            user = db.query(User).filter(User.id == payload.get("sub")).first()
+            if user:
+                return {
+                    "id": str(user.id),
+                    "email": user.email,
+                    "name": user.display_name or user.name,
+                    "avatar": user.avatar,
+                    "is_guest": False,
+                    "plan": user.plan,
+                    "credits_balance": user.credits_balance,
+                    "credits_max": user.credits_max,
+                    "default_output": user.default_output,
+                    "preferred_tone": user.preferred_tone,
+                }
+
+    guest_token = request.cookies.get("guest_token")
+    if guest_token:
+        from app.core.security import verify_token
+        payload = verify_token(guest_token)
+        if payload and payload.get("type") == "guest":
+            session = db.query(GuestSession).filter(
+                GuestSession.temp_token == guest_token,
+                GuestSession.converted == False
+            ).first()
+            if session:
+                return {
+                    "id": str(session.id),
+                    "email": None,
+                    "name": "Guest",
+                    "avatar": None,
+                    "is_guest": True,
+                    "plan": "guest",
+                    "credits_balance": session.credits_balance,
+                    "credits_max": session.credits_max,
+                }
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 @router.get("/login")
 async def login(request: Request):
@@ -62,6 +109,8 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
         user = User(
             email=email,
             name=display_name,
+            display_name=display_name,
+            google_id=user_info.get("sub"),
             avatar=user_info.get("picture")
         )
         db.add(user)
@@ -87,10 +136,23 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
     db.add(db_refresh_token)
     db.commit()
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token
+    response = RedirectResponse(url="http://localhost:5173/dashboard")
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True, 
+        samesite="lax",
+        secure=False 
     )
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True, 
+        samesite="lax",
+        secure=False
+    )
+    
+    return response
 
 
 @router.post("/refresh")
@@ -125,7 +187,7 @@ async def refresh_token(body = Depends(RefreshTokenRequest), db = Depends(get_db
 
     user = db.query(User).filter(User.id == payload.get("sub")).first()
 
-    if not user or not user.is_active:
+    if not user or not user.is_active or user.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive"
@@ -162,20 +224,32 @@ async def create_guest_session(db = Depends(get_db)):
     db.add(guest_session)
     db.commit()
 
-    return GuestTokenResponse(
-        temp_token=temp_token,
-        expires_in_minutes=30
+    response = RedirectResponse(url="http://localhost:5173/dashboard", status_code=302)
+    response.set_cookie(
+        key="guest_token",
+        value=temp_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=1800  # 30 minutes
     )
+    return response
 
 
 @router.post("/logout")
-async def logout(body = Depends(RefreshTokenRequest), db = Depends(get_db)):
-    db_token = db.query(RefreshToken).filter(
-        RefreshToken.token == body.refresh_token
-    ).first()
+async def logout(request: Request, db = Depends(get_db)):
+    refresh_token = request.cookies.get("refresh_token")
 
-    if db_token:
-        db_token.revoked = True
-        db.commit()
+    if refresh_token:
+        db_token = db.query(RefreshToken).filter(
+            RefreshToken.token == refresh_token
+        ).first()
+        if db_token:
+            db_token.revoked = True
+            db.commit()
 
-    return {"message": "Logged out successfully"}
+    response = RedirectResponse(url="http://localhost:5173/", status_code=302)
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    response.delete_cookie("guest_token")
+    return response

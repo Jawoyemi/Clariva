@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, documents, export, token
+from app.routers import auth, documents, export, token, chat, settings as settings_router, credits
 
 Base.metadata.create_all(bind=engine)
 
@@ -27,7 +27,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-
+app.include_router(documents.router)
+app.include_router(export.router)
+app.include_router(token.router)
+app.include_router(chat.router)
+app.include_router(settings_router.router)
+app.include_router(credits.router)
 
 
 @app.get("/health")

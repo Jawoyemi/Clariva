@@ -3,3 +3,4 @@ from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenRespo
 from app.schemas.session import GuestSessionCreate, GuestSessionResponse
 from app.schemas.document import DocumentCreate, DocumentResponse
 from app.schemas.prompt import IntakeInput, ClarificationAnswers, DocumentSelection
+from app.schemas.chat import ChatSessionCreate, ChatSessionResponse, ChatSessionDetail, ChatMessageCreate, ChatMessageResponse
