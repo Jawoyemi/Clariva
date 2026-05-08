@@ -1033,8 +1033,8 @@ const Dashboard = () => {
           )}
           {isGuest && sidebarOpen && (
             <div className="sidebar-guest-nav" style={{padding: '0 16px', marginBottom: '16px'}}>
-              <Link to="/" className="recent-item">🏠 Home</Link>
-              <Link to="/login" className="recent-item">🔑 Login</Link>
+              <Link to="/" className="recent-item">Home</Link>
+              <Link to="/login" className="recent-item">Login</Link>
             </div>
           )}
           <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} title={sidebarOpen ? 'Collapse' : 'Expand'}>
