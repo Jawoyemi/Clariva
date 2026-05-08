@@ -13,7 +13,7 @@ class DocumentResponse(BaseModel):
     type: DocumentType
     title: str
     content: str
-    pdf_path: str | None = None
+    docx_path: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

@@ -24,7 +24,7 @@ COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 COPY scripts ./scripts
 COPY storage ./storage
-RUN chmod +x ./scripts/start.sh
+RUN sed -i 's/\r$//' ./scripts/start.sh && chmod +x ./scripts/start.sh
 
 EXPOSE 8000
 

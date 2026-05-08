@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 from datetime import datetime
+import os
 from app.database import get_db
 from app.core.dependencies import get_current_user_or_guest
 from app.models.document import Document, DocumentType
@@ -11,7 +12,8 @@ from app.schemas.prompt import IntakeInput, ClarificationAnswers
 from app.services.ai import call_ai, parse_json_response
 from app.services.credits import charge_credits, refund_credits, GENERATION_COSTS
 from app.services.document_renderer import render_docx_from_markdown
-from app.services.storage import upload_file, get_download_url
+from app.services.rate_limit import enforce_limit
+from app.services.storage import upload_file, get_download_url, delete_file
 from app.services.user_context import build_user_context
 from app.prompts.intake import INTAKE_PROMPT
 from app.prompts.outliner import OUTLINER_PROMPT
@@ -29,6 +31,18 @@ from app.prompts.prd import (
 import json
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def limit_document_planning(request: Request):
+    enforce_limit(request, "document_planning")
+
+
+def limit_document_compile(request: Request):
+    enforce_limit(request, "document_compile")
+
+
+def limit_document_revise(request: Request):
+    enforce_limit(request, "document_revise")
 
 
 def _owner_fields(owner):
@@ -58,8 +72,27 @@ def _document_payload(document: Document) -> dict:
         "title": document.title,
         "created_at": document.created_at,
         "updated_at": document.updated_at,
+        "docx_path": document.docx_path,
         "download_url": f"/documents/{document.id}/download",
     }
+
+
+def _safe_remove_local_file(path: str | None) -> None:
+    if not path:
+        return
+    try:
+        if os.path.exists(path):
+            os.unlink(path)
+    except OSError:
+        pass
+
+
+def _cleanup_uploaded_files(storage_keys: list[str]) -> None:
+    for key in reversed(storage_keys):
+        try:
+            delete_file(key)
+        except Exception:
+            pass
 
 
 def _brief_context(brief: dict, owner) -> str:
@@ -97,6 +130,7 @@ def _generate_sow_payload(
     brief: dict,
     answers: list,
     sow_outline: list,
+    uploaded_files: list[str],
 ) -> dict:
     brief_context = _brief_context(brief, owner)
     scope_prompt = SOW_SCOPE_PROMPT.format(
@@ -150,6 +184,7 @@ def _generate_sow_payload(
         doc_type=DocumentType.SOW,
         title=title,
         markdown=sow_markdown.strip(),
+        uploaded_files=uploaded_files,
     )
 
     return {
@@ -167,6 +202,7 @@ def _generate_prd_payload(
     brief: dict,
     answers: list,
     prd_outline: list,
+    uploaded_files: list[str],
 ) -> dict:
     brief_context = _brief_context(brief, owner)
     features_prompt = PRD_FEATURES_PROMPT.format(
@@ -219,6 +255,7 @@ def _generate_prd_payload(
         doc_type=DocumentType.PRD,
         title=title,
         markdown=prd_markdown.strip(),
+        uploaded_files=uploaded_files,
     )
 
     return {
@@ -236,6 +273,7 @@ def _store_generated_document(
     doc_type: DocumentType,
     title: str,
     markdown: str,
+    uploaded_files: list[str],
 ) -> Document:
     document = Document(
         **_owner_fields(owner),
@@ -244,46 +282,64 @@ def _store_generated_document(
         content=markdown,
     )
     db.add(document)
-    db.commit()
-    db.refresh(document)
+    db.flush()
 
-    local_docx = render_docx_from_markdown(
-        markdown=markdown,
-        title=title,
-        document_type=doc_type.value,
-    )
-    owner_prefix = "users" if owner["type"] == "user" else "guests"
-    storage_key = f"{owner_prefix}/{owner['data'].id}/documents/{document.id}/v1.docx"
-    stored_key = upload_file(
-        local_docx,
-        storage_key,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    local_docx = None
+    try:
+        local_docx = render_docx_from_markdown(
+            markdown=markdown,
+            title=title,
+            document_type=doc_type.value,
+        )
+        owner_prefix = "users" if owner["type"] == "user" else "guests"
+        storage_key = f"{owner_prefix}/{owner['data'].id}/documents/{document.id}/v1.docx"
+        stored_key = upload_file(
+            local_docx,
+            storage_key,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        uploaded_files.append(stored_key)
+        document.docx_path = stored_key
+    finally:
+        _safe_remove_local_file(local_docx)
 
-    document.pdf_path = stored_key
-    db.commit()
-    db.refresh(document)
     return document
 
 
 def _regenerate_document_file(*, db: Session, owner, document: Document) -> Document:
-    local_docx = render_docx_from_markdown(
-        markdown=document.content,
-        title=document.title,
-        document_type=document.type.value,
-    )
-    owner_prefix = "users" if owner["type"] == "user" else "guests"
-    version = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    storage_key = f"{owner_prefix}/{owner['data'].id}/documents/{document.id}/v{version}.docx"
-    stored_key = upload_file(
-        local_docx,
-        storage_key,
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    previous_key = document.docx_path
+    local_docx = None
+    stored_key = None
+    try:
+        local_docx = render_docx_from_markdown(
+            markdown=document.content,
+            title=document.title,
+            document_type=document.type.value,
+        )
+        owner_prefix = "users" if owner["type"] == "user" else "guests"
+        version = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        storage_key = f"{owner_prefix}/{owner['data'].id}/documents/{document.id}/v{version}.docx"
+        stored_key = upload_file(
+            local_docx,
+            storage_key,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        document.docx_path = stored_key
+        db.commit()
+        db.refresh(document)
+    except Exception:
+        db.rollback()
+        if stored_key:
+            _cleanup_uploaded_files([stored_key])
+        raise
+    finally:
+        _safe_remove_local_file(local_docx)
 
-    document.pdf_path = stored_key
-    db.commit()
-    db.refresh(document)
+    if previous_key and previous_key != stored_key:
+        try:
+            delete_file(previous_key)
+        except Exception:
+            pass
     return document
 
 
@@ -316,6 +372,42 @@ async def list_documents(
     return query.order_by(Document.created_at.desc()).all()
 
 
+@router.delete("")
+@router.delete("/", include_in_schema=False)
+async def clear_documents(
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+):
+    documents = _owner_filter(db.query(Document), owner).all()
+    storage_keys = [doc.docx_path for doc in documents if doc.docx_path]
+    try:
+        for doc in documents:
+            db.delete(doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    _cleanup_uploaded_files(storage_keys)
+    return {"message": "All documents cleared"}
+
+
+@router.delete("/{document_id}")
+@router.delete("/{document_id}/", include_in_schema=False)
+async def delete_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+):
+    document = _owner_filter(db.query(Document), owner).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    storage_key = document.docx_path
+    db.delete(document)
+    db.commit()
+    _cleanup_uploaded_files([storage_key] if storage_key else [])
+    return {"message": "Document deleted"}
+
+
 @router.get("/{document_id}/download")
 async def download_document(
     document_id: str,
@@ -325,10 +417,10 @@ async def download_document(
     document = _owner_filter(db.query(Document), owner).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    if not document.pdf_path:
+    if not document.docx_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file is not available")
 
-    local_path = Path(document.pdf_path)
+    local_path = Path(document.docx_path)
     if local_path.exists():
         return FileResponse(
             path=local_path,
@@ -336,15 +428,17 @@ async def download_document(
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
 
-    return RedirectResponse(get_download_url(document.pdf_path))
+    return RedirectResponse(get_download_url(document.docx_path))
 
 
 @router.post("/{document_id}/revise")
 async def revise_document(
     document_id: str,
     body: dict,
+    request: Request,
     db: Session = Depends(get_db),
     owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_revise),
 ):
     instruction = str(body.get("instruction") or "").strip()
     if len(instruction) < 3:
@@ -381,7 +475,12 @@ async def revise_document(
 
 
 @router.post("/intake")
-async def intake(body: IntakeInput, db = Depends(get_db)):
+async def intake(
+    body: IntakeInput,
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_document_planning),
+):
     if not body.idea or len(body.idea.strip()) < 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -402,7 +501,12 @@ async def intake(body: IntakeInput, db = Depends(get_db)):
 
 
 @router.post("/clarify")
-async def clarify(body: dict, db = Depends(get_db)):
+async def clarify(
+    body: dict,
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_document_planning),
+):
     brief = body.get("brief")
 
     if not brief:
@@ -433,7 +537,12 @@ async def clarify(body: dict, db = Depends(get_db)):
     return {"questions": questions}
 
 @router.post("/outline")
-async def outline(body: dict, db = Depends(get_db)):
+async def outline(
+    body: dict,
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_document_planning),
+):
     brief = body.get("brief")
     answers = body.get("answers")
 
@@ -489,8 +598,10 @@ async def outline(body: dict, db = Depends(get_db)):
 @router.post("/sow/compile")
 async def compile_sow(
     body: dict,
+    request: Request,
     db: Session = Depends(get_db),
     owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_compile),
 ):
     brief = body.get("brief")
     answers = body.get("answers", [])
@@ -499,6 +610,7 @@ async def compile_sow(
 
     cost = GENERATION_COSTS["sow"]
     charge_credits(owner, db, cost=cost, description="SOW generation")
+    uploaded_files: list[str] = []
 
     try:
         payload = _generate_sow_payload(
@@ -507,12 +619,18 @@ async def compile_sow(
             brief=brief,
             answers=answers,
             sow_outline=sow_outline,
+            uploaded_files=uploaded_files,
         )
+        db.commit()
     except HTTPException as exc:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="SOW generation failed")
         raise
     except Exception:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="SOW generation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -525,8 +643,10 @@ async def compile_sow(
 @router.post("/prd/compile")
 async def compile_prd(
     body: dict,
+    request: Request,
     db: Session = Depends(get_db),
     owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_compile),
 ):
     brief = body.get("brief")
     answers = body.get("answers", [])
@@ -535,6 +655,7 @@ async def compile_prd(
 
     cost = GENERATION_COSTS["prd"]
     charge_credits(owner, db, cost=cost, description="PRD generation")
+    uploaded_files: list[str] = []
 
     try:
         payload = _generate_prd_payload(
@@ -543,12 +664,18 @@ async def compile_prd(
             brief=brief,
             answers=answers,
             prd_outline=prd_outline,
+            uploaded_files=uploaded_files,
         )
+        db.commit()
     except HTTPException as exc:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="PRD generation failed")
         raise
     except Exception:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="PRD generation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -561,8 +688,10 @@ async def compile_prd(
 @router.post("/both/compile")
 async def compile_both(
     body: dict,
+    request: Request,
     db: Session = Depends(get_db),
     owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_compile),
 ):
     brief = body.get("brief")
     answers = body.get("answers", [])
@@ -574,6 +703,7 @@ async def compile_both(
 
     cost = GENERATION_COSTS["both"]
     charge_credits(owner, db, cost=cost, description="SOW + PRD bundle generation")
+    uploaded_files: list[str] = []
 
     try:
         sow_payload = _generate_sow_payload(
@@ -582,6 +712,7 @@ async def compile_both(
             brief=brief,
             answers=answers,
             sow_outline=sow_outline,
+            uploaded_files=uploaded_files,
         )
         prd_payload = _generate_prd_payload(
             db=db,
@@ -589,12 +720,18 @@ async def compile_both(
             brief=brief,
             answers=answers,
             prd_outline=prd_outline,
+            uploaded_files=uploaded_files,
         )
+        db.commit()
     except HTTPException as exc:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")
         raise
     except Exception:
+        db.rollback()
+        _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

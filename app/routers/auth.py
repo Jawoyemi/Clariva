@@ -14,7 +14,9 @@ from app.models.refresh_token import RefreshToken
 from app.models.session import GuestSession
 from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenResponse
 from app.config import settings
+from app.services.credits import apply_refill, next_refill_at
 from app.services.email import send_welcome_email
+from app.services.rate_limit import enforce_limit
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 import uuid
@@ -22,6 +24,18 @@ import uuid
 from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def limit_auth_guest(request: Request):
+    enforce_limit(request, "auth_guest")
+
+
+def limit_auth_refresh(request: Request):
+    enforce_limit(request, "auth_refresh")
+
+
+def limit_auth_login(request: Request):
+    enforce_limit(request, "auth_login")
 
 @router.get("/me")
 async def get_me(request: Request, db = Depends(get_db)):
@@ -31,7 +45,8 @@ async def get_me(request: Request, db = Depends(get_db)):
         payload = verify_token(access_token)
         if payload and payload.get("type") == "access":
             user = db.query(User).filter(User.id == payload.get("sub")).first()
-            if user:
+            if user and user.is_active and not user.deleted_at:
+                apply_refill(user, db)
                 return {
                     "id": str(user.id),
                     "email": user.email,
@@ -41,6 +56,7 @@ async def get_me(request: Request, db = Depends(get_db)):
                     "plan": user.plan,
                     "credits_balance": user.credits_balance,
                     "credits_max": user.credits_max,
+                    "next_refill_at": next_refill_at(user),
                     "default_output": user.default_output,
                     "preferred_tone": user.preferred_tone,
                 }
@@ -55,6 +71,7 @@ async def get_me(request: Request, db = Depends(get_db)):
                 GuestSession.converted == False
             ).first()
             if session:
+                apply_refill(session, db)
                 return {
                     "id": str(session.id),
                     "email": None,
@@ -64,12 +81,13 @@ async def get_me(request: Request, db = Depends(get_db)):
                     "plan": "guest",
                     "credits_balance": session.credits_balance,
                     "credits_max": session.credits_max,
+                    "next_refill_at": next_refill_at(session),
                 }
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request, _=Depends(limit_auth_login)):
     redirect_uri = settings.GOOGLE_REDIRECT_URI
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
@@ -156,7 +174,12 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
 
 
 @router.post("/refresh")
-async def refresh_token(body = Depends(RefreshTokenRequest), db = Depends(get_db)):
+async def refresh_token(
+    body: RefreshTokenRequest,
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_auth_refresh),
+):
     payload = verify_token(body.refresh_token)
 
     if not payload or payload.get("type") != "refresh":
@@ -211,7 +234,11 @@ async def refresh_token(body = Depends(RefreshTokenRequest), db = Depends(get_db
 
 
 @router.post("/guest")
-async def create_guest_session(db = Depends(get_db)):
+async def create_guest_session(
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_auth_guest),
+):
     session_id = str(uuid.uuid4())
     temp_token = create_guest_token(session_id)
     expires_at = datetime.utcnow() + timedelta(minutes=30)

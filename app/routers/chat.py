@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -7,6 +7,7 @@ from app.models.chat import ChatSession, ChatMessageRecord
 from app.schemas.chat import ChatSessionCreate, ChatMessageCreate
 from app.prompts.intake import INTAKE_PROMPT
 from app.prompts.clarification import CLARIFICATION_PROMPT
+from app.services.rate_limit import enforce_limit
 from app.services.ai import (
     call_ai,
     classify_intent,
@@ -18,6 +19,18 @@ import re
 
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def limit_chat_general(request: Request):
+    enforce_limit(request, "chat_general")
+
+
+def limit_chat_generation(request: Request):
+    enforce_limit(request, "chat_generation")
+
+
+def limit_chat_history_write(request: Request):
+    enforce_limit(request, "chat_history_write")
 
 
 INTAKE_JSON_REPAIR_PROMPT = """
@@ -161,6 +174,19 @@ async def list_chat_sessions(
     return [_session_payload(session) for session in sessions]
 
 
+@router.delete("/sessions")
+@router.delete("/sessions/", include_in_schema=False)
+async def clear_chat_sessions(
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+):
+    sessions = _owner_filter(db.query(ChatSession), owner).all()
+    for session in sessions:
+        db.delete(session)
+    db.commit()
+    return {"message": "Chat history cleared"}
+
+
 @router.post("/sessions")
 async def create_chat_session(
     body: ChatSessionCreate,
@@ -196,12 +222,29 @@ async def get_chat_session(
     return payload
 
 
+@router.delete("/sessions/{session_id}")
+@router.delete("/sessions/{session_id}/", include_in_schema=False)
+async def delete_chat_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+):
+    session = _owner_filter(db.query(ChatSession), owner).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    db.delete(session)
+    db.commit()
+    return {"message": "Chat session deleted"}
+
+
 @router.post("/sessions/{session_id}/messages")
 async def save_chat_message(
     session_id: str,
     body: ChatMessageCreate,
+    request: Request,
     db: Session = Depends(get_db),
     owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_chat_history_write),
 ):
     session = _owner_filter(db.query(ChatSession), owner).filter(ChatSession.id == session_id).first()
     if not session:
@@ -223,7 +266,12 @@ async def save_chat_message(
 
 
 @router.post("/reply")
-async def chat_reply(body: ChatRequest, db=Depends(get_db)):
+async def chat_reply(
+    body: ChatRequest,
+    request: Request,
+    db=Depends(get_db),
+    _=Depends(limit_chat_general),
+):
     text = body.message.strip()
     if not text:
         raise HTTPException(
@@ -240,7 +288,11 @@ async def chat_reply(body: ChatRequest, db=Depends(get_db)):
 
 
 @router.post("/message")
-async def chat_message(body: ChatRequest, db=Depends(get_db)):
+async def chat_message(
+    body: ChatRequest,
+    request: Request,
+    db=Depends(get_db),
+):
     text = body.message.strip()
     if not text:
         raise HTTPException(
@@ -251,6 +303,7 @@ async def chat_message(body: ChatRequest, db=Depends(get_db)):
     history = [{"role": item.role, "content": item.content} for item in body.history]
 
     if is_doc_type_only(text):
+        enforce_limit(request, "chat_generation")
         selected_type = detect_doc_type(text)
         return {
             "intent": "document_generation",
@@ -274,6 +327,7 @@ async def chat_message(body: ChatRequest, db=Depends(get_db)):
     intent = routing.get("intent", "general_chat")
 
     if intent == "general_chat":
+        enforce_limit(request, "chat_general")
         reply = generate_chat_reply(text, history=history)
         return {
             "intent": "general_chat",
@@ -283,6 +337,8 @@ async def chat_message(body: ChatRequest, db=Depends(get_db)):
                 "reason": routing.get("reason"),
             },
         }
+
+    enforce_limit(request, "chat_generation")
 
     intake_prompt = INTAKE_PROMPT.format(idea=text)
     intake_raw = call_ai(intake_prompt)

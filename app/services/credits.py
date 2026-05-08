@@ -9,6 +9,7 @@ from app.models.user import User
 
 
 REFILL_RATES = {
+    "guest": {"amount": 10, "interval_hours": 0.5},
     "free": {"amount": 10, "interval_hours": 6},
     "pro": {"amount": 25, "interval_hours": 3},
 }
@@ -48,9 +49,6 @@ def get_plan(owner_or_user) -> str:
 
 def apply_refill(account, db: Session) -> None:
     plan = get_plan(account)
-    if plan == "guest":
-        return
-
     rate = REFILL_RATES.get(plan)
     if not rate:
         return

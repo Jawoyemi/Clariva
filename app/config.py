@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     R2_SECRET_ACCESS_KEY: Optional[str] = None
     R2_BUCKET_NAME: Optional[str] = None
     R2_PUBLIC_BASE_URL: Optional[str] = None
+    RATE_LIMIT_ENABLED: bool = True
 
     class Config:
         env_file = ".env"

@@ -19,8 +19,15 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 ALLOWED_OUTPUT = {"sow", "prd", "both"}
 ALLOWED_TONE = {"formal", "conversational"}
-ALLOWED_FORMAT = {"pdf", "markdown"}
+ALLOWED_FORMAT = {"docx"}
 DISPLAY_NAME_RE = re.compile(r"^[A-Za-z0-9 .'-]+$")
+
+
+def _normalize_export_format(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized in {"pdf", "markdown", "docx"}:
+        return "docx"
+    return "docx"
 
 
 def _settings_payload(user) -> dict:
@@ -32,13 +39,14 @@ def _settings_payload(user) -> dict:
         "industry": user.industry,
         "default_output": user.default_output,
         "preferred_tone": user.preferred_tone,
-        "export_format": user.export_format,
+        "export_format": _normalize_export_format(user.export_format),
         "plan": user.plan,
         "credits_balance": user.credits_balance,
         "credits_max": user.credits_max,
         "last_refill_at": user.last_refill_at,
         "oauth_connected": bool(user.google_id or not user.hashed_password),
         "next_refill_at": next_refill_at(user),
+        "created_at": user.created_at,
     }
 
 
@@ -87,8 +95,8 @@ async def update_preferences(
         raise HTTPException(status_code=422, detail="Invalid output type")
     if "preferred_tone" in values and values["preferred_tone"] not in ALLOWED_TONE:
         raise HTTPException(status_code=422, detail="Invalid tone")
-    if "export_format" in values and values["export_format"] not in ALLOWED_FORMAT:
-        raise HTTPException(status_code=422, detail="Invalid export format")
+    if "export_format" in values:
+        values["export_format"] = _normalize_export_format(values["export_format"])
 
     for field, value in values.items():
         setattr(user, field, value)

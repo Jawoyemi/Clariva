@@ -80,9 +80,51 @@ const toDisplayText = (value) => {
 };
 
 // Chat message types: 'user' | 'assistant' | 'clarify' | 'error'
+
+const Countdown = ({ targetDate }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    if (!targetDate) {
+      setTimeLeft('Full');
+      return;
+    }
+
+    const update = () => {
+      const now = new Date().getTime();
+      const target = new Date(targetDate).getTime();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        setTimeLeft('Refilling soon...');
+        return;
+      }
+
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      const parts = [];
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+      parts.push(`${seconds}s`);
+
+      setTimeLeft(parts.join(' '));
+    };
+
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  if (!targetDate) return <span>Full</span>;
+  return <span>{timeLeft}</span>;
+};
+
 const Dashboard = () => {
   const userLoadData = useLoaderData();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarView, setSidebarView] = useState('chats');
   const mainRef = useRef(null);
   const [showLogin, setShowLogin] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -107,13 +149,68 @@ const Dashboard = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsData, setSettingsData] = useState(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [showIndividualChats, setShowIndividualChats] = useState(false);
+  const [showIndividualDocs, setShowIndividualDocs] = useState(false);
+  const [typingPlaceholder, setTypingPlaceholder] = useState('');
   const currentChatIdRef = useRef(null);
   const requestInFlightRef = useRef(false);
+  const textareaRef = useRef(null);
 
   const userName = userLoadData?.name || 'Guest';
+  const userEmail = userLoadData?.email || '';
   const userInitial = userName.charAt(0).toUpperCase();
   const isGuest = userLoadData?.is_guest ?? true;
   const suggestions = getRotatingSuggestions();
+
+  useEffect(() => {
+    if (phase !== 'idle') {
+      setTypingPlaceholder('');
+      return;
+    }
+
+    let timeoutId;
+    let currentSuggestionIndex = 0;
+    let currentCharIndex = 0;
+    let isDeleting = false;
+
+    const typingSuggestions = [
+      'Build a SaaS platform for freelancers...',
+      'Create a mobile app that generates SOWs...',
+      'Design a healthtech appointment booking app...',
+      'Build an internal HR tool for onboarding...',
+      'Create an e-commerce returns platform...',
+    ];
+
+    const type = () => {
+      const currentSuggestion = typingSuggestions[currentSuggestionIndex];
+
+      if (isDeleting) {
+        setTypingPlaceholder(currentSuggestion.substring(0, currentCharIndex - 1));
+        currentCharIndex--;
+      } else {
+        setTypingPlaceholder(currentSuggestion.substring(0, currentCharIndex + 1));
+        currentCharIndex++;
+      }
+
+      let typingSpeed = isDeleting ? 25 : 60;
+
+      if (!isDeleting && currentCharIndex === currentSuggestion.length) {
+        typingSpeed = 2000;
+        isDeleting = true;
+      } else if (isDeleting && currentCharIndex === 0) {
+        isDeleting = false;
+        currentSuggestionIndex = (currentSuggestionIndex + 1) % typingSuggestions.length;
+        typingSpeed = 400;
+      }
+
+      timeoutId = setTimeout(type, typingSpeed);
+    };
+
+    timeoutId = setTimeout(type, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [phase]);
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -210,6 +307,30 @@ const Dashboard = () => {
     return fallback;
   };
 
+  const deleteRequest = async (path, fallbackMessage) => {
+    let res = await fetch(`${API}${path}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+
+    if (res.status === 405 && !path.endsWith('/')) {
+      res = await fetch(`${API}${path}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    }
+
+    if (!res.ok) {
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+      throw new Error(formatApiError(payload, fallbackMessage));
+    }
+  };
+
   const loadCreditBalance = async () => {
     try {
       const res = await fetch(`${API}/credits/balance`, { credentials: 'include' });
@@ -254,6 +375,69 @@ const Dashboard = () => {
       addMessage('error', `❌ ${error.message}`);
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const handleClearChats = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete all your chat history?')) return;
+    try {
+      await deleteRequest('/chat/sessions', 'Failed to clear chats');
+      setRecentChats([]);
+      if (!currentDocument) resetConversation();
+    } catch (error) {
+      addMessage('error', `❌ ${error.message}`);
+    }
+  };
+
+  const handleClearDocuments = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete all your generated documents?')) return;
+    try {
+      await deleteRequest('/documents', 'Failed to clear documents');
+      setRecentDocuments([]);
+      if (currentDocument) resetConversation();
+    } catch (error) {
+      addMessage('error', `❌ ${error.message}`);
+    }
+  };
+
+  const handleDeleteSpecificChat = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this chat session?')) return;
+    try {
+      await deleteRequest(`/chat/sessions/${id}`, 'Failed to delete chat');
+      setRecentChats((prev) => prev.filter((chat) => chat.id !== id));
+      if (currentChatId === id) resetConversation();
+    } catch (error) {
+      addMessage('error', `❌ ${error.message}`);
+    }
+  };
+
+  const handleDeleteSpecificDoc = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) return;
+    try {
+      await deleteRequest(`/documents/${id}`, 'Failed to delete document');
+      setRecentDocuments((prev) => prev.filter((doc) => doc.id !== id));
+      if (currentDocument?.id === id) resetConversation();
+    } catch (error) {
+      addMessage('error', `❌ ${error.message}`);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.')) return;
+    try {
+      const res = await fetch(`${API}/settings/account`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to delete account');
+      
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `${API}/auth/logout`;
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      addMessage('error', `❌ ${error.message}`);
     }
   };
 
@@ -596,6 +780,12 @@ const Dashboard = () => {
     requestInFlightRef.current = true;
     setInputValue('');
     setLoading(true);
+    
+    // Auto-focus immediately after clear
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      setTimeout(() => textareaRef.current.focus(), 10);
+    }
 
     try {
     if (phase === 'idle') {
@@ -825,6 +1015,14 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="sidebar-mobile-overlay" 
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <aside className={`dashboard-sidebar${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
         <div className="sidebar-header">
@@ -836,103 +1034,179 @@ const Dashboard = () => {
           </button>
         </div>
 
-        {sidebarOpen && (
-          <>
-            <button className="new-doc-btn" onClick={resetConversation}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              New Document
-            </button>
-            <div className="sidebar-section">
-              <h4 className="sidebar-subtitle">Recent Chats</h4>
-              {recentChats.length ? (
-                <div className="recent-list">
-                  {recentChats.slice(0, 8).map((chat) => (
-                    <button
-                      key={chat.id}
-                      className={`recent-item${chat.id === currentChatId ? ' recent-item-active' : ''}`}
-                      type="button"
-                      onClick={() => loadChatSession(chat.id)}
-                      title={chat.title}
-                    >
-                      {chat.title}
-                    </button>
-                  ))}
+        <button className={`new-doc-btn ${sidebarOpen ? '' : 'collapsed'}`} onClick={resetConversation} title="New Document">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          {sidebarOpen && <span>New Document</span>}
+        </button>
+
+        <div className="sidebar-scroll-area">
+          {sidebarOpen ? (
+            <>
+              <div className="sidebar-tabs">
+                <button 
+                  className={`sidebar-tab ${sidebarView === 'chats' ? 'active' : ''}`}
+                  onClick={() => setSidebarView('chats')}
+                >
+                  Chats
+                </button>
+                <button 
+                  className={`sidebar-tab ${sidebarView === 'documents' ? 'active' : ''}`}
+                  onClick={() => setSidebarView('documents')}
+                >
+                  Documents
+                </button>
+              </div>
+
+              {sidebarView === 'chats' ? (
+                <div className="sidebar-section">
+                  {recentChats.length ? (
+                    <div className="recent-list">
+                      {recentChats.slice(0, 8).map((chat) => (
+                        <button
+                          key={chat.id}
+                          className={`recent-item${chat.id === currentChatId ? ' recent-item-active' : ''}`}
+                          type="button"
+                          onClick={() => loadChatSession(chat.id)}
+                          title={chat.title}
+                        >
+                          {chat.title}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="sidebar-empty">No chats yet.</p>
+                  )}
                 </div>
               ) : (
-                <p className="sidebar-empty">No chats yet.</p>
-              )}
-            </div>
-            <div className="sidebar-section">
-              <h4 className="sidebar-subtitle">Recent Documents</h4>
-              {recentDocuments.length ? (
-                <div className="recent-list">
-                  {recentDocuments.slice(0, 8).map((doc) => (
-                    <button
-                      key={doc.id}
-                      className="recent-item"
-                      type="button"
-                      onClick={() => {
-                        const loadedDocument = {
-                          ...doc,
-                          download_url: `/documents/${doc.id}/download`,
-                        };
-                        startDocumentChat(loadedDocument);
-                      }}
-                      title={doc.title}
-                    >
-                      {doc.type}: {doc.title}
-                    </button>
-                  ))}
+                <div className="sidebar-section">
+                  {recentDocuments.length ? (
+                    <div className="recent-list">
+                      {recentDocuments.slice(0, 8).map((doc) => (
+                        <button
+                          key={doc.id}
+                          className="recent-item"
+                          type="button"
+                          onClick={() => {
+                            const loadedDocument = {
+                              ...doc,
+                              download_url: `/documents/${doc.id}/download`,
+                            };
+                            startDocumentChat(loadedDocument);
+                          }}
+                          title={doc.title}
+                        >
+                          {doc.type}: {doc.title}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="sidebar-empty">No documents yet. Start building!</p>
+                  )}
                 </div>
-              ) : (
-                <p className="sidebar-empty">No documents yet. Start building!</p>
               )}
+            </>
+          ) : (
+            <div className="sidebar-collapsed-nav">
+              <button className={`collapsed-nav-icon ${sidebarView === 'chats' ? 'active' : ''}`} title="Chats" onClick={() => { setSidebarView('chats'); setSidebarOpen(true); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                </svg>
+              </button>
+              <button className={`collapsed-nav-icon ${sidebarView === 'documents' ? 'active' : ''}`} title="Documents" onClick={() => { setSidebarView('documents'); setSidebarOpen(true); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+              </button>
             </div>
-          </>
-        )}
+          )}
+        </div>
 
         <div className="sidebar-bottom">
-          <form method="POST" action={`${API}/auth/logout`}>
-            <button type="submit" className={`logout-btn${sidebarOpen ? '' : ' logout-btn-collapsed'}`} title="Logout">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              {sidebarOpen && <span>Logout</span>}
-            </button>
-          </form>
+          <div className={`sidebar-profile-card ${profileMenuOpen ? 'profile-menu-active' : ''}`}>
+            {profileMenuOpen && (
+              <div className="profile-dropdown-menu">
+                <button className="dropdown-item" onClick={() => { setProfileMenuOpen(false); loadSettings(); }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                  Settings
+                </button>
+                <div className="dropdown-divider"></div>
+                <form method="POST" action={`${API}/auth/logout`} className="dropdown-item dropdown-logout" style={{ margin: 0, padding: 0 }}>
+                  <button type="submit" className="dropdown-item dropdown-logout" style={{ width: '100%' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                      <polyline points="16 17 21 12 16 7"></polyline>
+                      <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Logout
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {sidebarOpen ? (
+              <button className="profile-card-btn" onClick={() => setProfileMenuOpen(!profileMenuOpen)}>
+                <div className="profile-card-avatar">{userInitial}</div>
+                <div className="profile-card-info">
+                  <div className="profile-card-name">{userName}</div>
+                  <div className="profile-card-email">{userEmail}</div>
+                </div>
+                <svg className={`profile-chevron ${profileMenuOpen ? 'open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            ) : (
+              <button className="collapsed-profile-btn" onClick={(e) => { e.stopPropagation(); setProfileMenuOpen(prev => !prev); }} title="Profile">
+                <div className="profile-card-avatar">{userInitial}</div>
+              </button>
+            )}
+          </div>
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="dashboard-main" ref={mainRef}>
+      <main className="dashboard-main" onClick={() => { if(profileMenuOpen) setProfileMenuOpen(false); }}>
         <header className="dashboard-header">
-          {isGuest && (
-            <div className="guest-banner">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          <div className="header-left">
+            <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
               </svg>
-              Guest session — your work won't be saved.
-              <button className="guest-signin-link" onClick={() => setShowLogin(true)}>Sign in to save →</button>
-            </div>
-          )}
-          <div className="header-spacer"></div>
-          <div className="credit-pill" title={creditBalance.next_refill_at ? `Next refill: ${new Date(creditBalance.next_refill_at).toLocaleString()}` : 'Credits'}>
-            <span>{creditBalance.plan}</span>
-            <strong>{creditBalance.credits_balance}/{creditBalance.credits_max}</strong>
-          </div>
-          <div className="user-profile">
-            <button className="avatar avatar-button" type="button" onClick={loadSettings} title="Settings">
-              {userInitial}
             </button>
+            {isGuest && (
+              <div className="guest-banner">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                Guest session — your work won't be saved.
+                <button className="guest-signin-link" onClick={() => setShowLogin(true)}>Sign in to save →</button>
+              </div>
+            )}
           </div>
+          <div className="header-spacer"></div>
+          {(() => {
+            const ratio = creditBalance.credits_max > 0 ? creditBalance.credits_balance / creditBalance.credits_max : 0;
+            const healthClass = ratio > 0.5 ? 'credit-healthy' : ratio > 0.2 ? 'credit-warning' : 'credit-critical';
+            return (
+              <div className={`credit-pill ${healthClass}`}>
+                <span>Credits:</span>
+                <strong>{creditBalance.credits_balance}/{creditBalance.credits_max}</strong>
+              </div>
+            );
+          })()}
         </header>
 
-        <div className={`dashboard-content${isEmpty ? ' dashboard-content-empty' : ''}`}>
+        <div className={`dashboard-content${isEmpty ? ' dashboard-content-empty' : ''}`} ref={mainRef}>
           {/* EMPTY STATE — everything centered as a unit */}
           {isEmpty && (
             <div className="centered-state">
@@ -944,8 +1218,9 @@ const Dashboard = () => {
               <div className="intake-wrapper">
                 <div className="intake-container">
                   <textarea
+                    ref={textareaRef}
                     className="intake-textarea"
-                    placeholder="Describe the product you want to document…"
+                    placeholder={typingPlaceholder || "Describe the product you want to document…"}
                     rows={1}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -1047,11 +1322,12 @@ const Dashboard = () => {
               <div className="intake-wrapper intake-wrapper-bottom">
                 <div className="intake-container">
                   <textarea
+                    ref={textareaRef}
                     className="intake-textarea"
                     placeholder={
                       phase === 'clarifying' ? 'Answer this question, or type "continue" to move on…'
                       : phase === 'choose_type' ? 'Type SOW, PRD, or both…'
-                      : 'Chat with Clariva…'
+                      : typingPlaceholder || 'Ask Clariva something…'
                     }
                     rows={1}
                     value={inputValue}
@@ -1098,22 +1374,18 @@ const Dashboard = () => {
 
             <div className="settings-grid">
               <section className="settings-section-card">
-                <h3>Profile</h3>
+                <h3>Account Information</h3>
                 <label>
-                  Display name
+                  Display Name
                   <input value={settingsData.display_name || ''} onChange={(e) => setSettingsData({ ...settingsData, display_name: e.target.value })} />
                 </label>
                 <label>
-                  Company
-                  <input value={settingsData.company_name || ''} onChange={(e) => setSettingsData({ ...settingsData, company_name: e.target.value })} />
+                  Email Address
+                  <input value={settingsData.email || ''} readOnly className="input-readonly" />
                 </label>
                 <label>
-                  Role
-                  <input value={settingsData.role || ''} onChange={(e) => setSettingsData({ ...settingsData, role: e.target.value })} />
-                </label>
-                <label>
-                  Industry
-                  <input value={settingsData.industry || ''} onChange={(e) => setSettingsData({ ...settingsData, industry: e.target.value })} />
+                  Account Created
+                  <input value={new Date(settingsData.created_at).toLocaleDateString()} readOnly className="input-readonly" />
                 </label>
                 <button
                   className="settings-save-btn"
@@ -1125,7 +1397,7 @@ const Dashboard = () => {
                     industry: settingsData.industry,
                   })}
                 >
-                  Save profile
+                  Save Account Info
                 </button>
               </section>
 
@@ -1149,8 +1421,7 @@ const Dashboard = () => {
                 <label>
                   Export format
                   <select value={settingsData.export_format} onChange={(e) => setSettingsData({ ...settingsData, export_format: e.target.value })}>
-                    <option value="pdf">PDF</option>
-                    <option value="markdown">Markdown</option>
+                    <option value="docx">DOCX</option>
                   </select>
                 </label>
                 <button
@@ -1166,21 +1437,75 @@ const Dashboard = () => {
                 </button>
               </section>
 
-              <section className="settings-section-card settings-usage-card">
-                <h3>Usage</h3>
-                <div className="usage-stat">
-                  <span>Current plan</span>
-                  <strong>{settingsData.plan}</strong>
+              <section className="settings-section-card settings-danger-card">
+                <h3>Data Management</h3>
+                <p className="settings-danger-desc">Manage your workspace data.</p>
+                
+                <div className="settings-danger-actions">
+                  <button type="button" className="settings-danger-btn" onClick={handleClearChats}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Delete All Chats
+                  </button>
+                  <button type="button" className="settings-danger-btn" onClick={handleClearDocuments}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Delete All Docs
+                  </button>
                 </div>
-                <div className="usage-stat">
-                  <span>Credits</span>
-                  <strong>{settingsData.credits_balance}/{settingsData.credits_max}</strong>
+
+                <div className="settings-individual-delete">
+                  <button type="button" className="settings-toggle-btn" onClick={() => setShowIndividualChats(!showIndividualChats)}>
+                    {showIndividualChats ? 'Hide Chats ▲' : 'Show Chats ▼'}
+                  </button>
+                  {showIndividualChats && (
+                    <div className="settings-item-list">
+                      {recentChats.map((chat) => (
+                        <div key={chat.id} className="settings-item-row">
+                          <span className="settings-item-title" title={chat.title}>{chat.title}</span>
+                          <button type="button" className="settings-trash-btn" onClick={() => handleDeleteSpecificChat(chat.id)} title="Delete Chat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {recentChats.length === 0 && <p className="settings-empty">No chats to display.</p>}
+                    </div>
+                  )}
+
+                  <button type="button" className="settings-toggle-btn" onClick={() => setShowIndividualDocs(!showIndividualDocs)}>
+                    {showIndividualDocs ? 'Hide Docs ▲' : 'Show Docs ▼'}
+                  </button>
+                  {showIndividualDocs && (
+                    <div className="settings-item-list">
+                      {recentDocuments.map((doc) => (
+                        <div key={doc.id} className="settings-item-row">
+                          <span className="settings-item-title" title={doc.title}>{doc.type}: {doc.title}</span>
+                          <button type="button" className="settings-trash-btn" onClick={() => handleDeleteSpecificDoc(doc.id)} title="Delete Document">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {recentDocuments.length === 0 && <p className="settings-empty">No documents to display.</p>}
+                    </div>
+                  )}
                 </div>
-                <div className="usage-stat">
-                  <span>Next refill</span>
-                  <strong>{settingsData.next_refill_at ? new Date(settingsData.next_refill_at).toLocaleString() : 'Full or not available'}</strong>
+              </section>
+
+              <section className="settings-section-card">
+                <h3>Help & Support</h3>
+                <div className="settings-support-links">
+                  <a href="#" className="settings-support-link">Documentation</a>
+                  <a href="#" className="settings-support-link">Contact Support</a>
+                  <a href="#" className="settings-support-link">Send Feedback</a>
                 </div>
-                {settingsData.plan === 'free' && <button className="settings-secondary-btn">Upgrade</button>}
+              </section>
+
+              <section className="settings-section-card settings-danger-card">
+                <h3>Danger Zone</h3>
+                <p className="settings-danger-desc">Permanently delete your account and all data.</p>
+                <div className="settings-danger-actions">
+                  <button type="button" className="settings-danger-btn" onClick={handleDeleteAccount}>
+                    Delete Account
+                  </button>
+                </div>
               </section>
             </div>
           </div>

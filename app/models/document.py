@@ -25,3 +25,11 @@ class Document(Base):
 
     user = relationship("User", backref="documents")
     guest_session = relationship("GuestSession", backref="documents")
+
+    @property
+    def docx_path(self):
+        return self.pdf_path
+
+    @docx_path.setter
+    def docx_path(self, value):
+        self.pdf_path = value

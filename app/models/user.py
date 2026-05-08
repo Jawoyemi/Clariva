@@ -19,7 +19,7 @@ class User(Base):
     industry = Column(String, nullable=True)
     default_output = Column(String, nullable=False, default="both")
     preferred_tone = Column(String, nullable=False, default="formal")
-    export_format = Column(String, nullable=False, default="pdf")
+    export_format = Column(String, nullable=False, default="docx")
     plan = Column(String, nullable=False, default="free")
     credits_balance = Column(Integer, nullable=False, default=30)
     credits_max = Column(Integer, nullable=False, default=30)

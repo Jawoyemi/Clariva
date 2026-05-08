@@ -45,6 +45,21 @@ def upload_file(local_path: str, storage_key: str, content_type: str) -> str:
     return str(target)
 
 
+def delete_file(storage_key: str) -> None:
+    if not storage_key:
+        return
+
+    if _using_r2():
+        _r2_client().delete_object(Bucket=settings.R2_BUCKET_NAME, Key=storage_key)
+        return
+
+    path = Path(storage_key)
+    if not path.is_absolute():
+        path = Path(settings.LOCAL_STORAGE_DIR) / storage_key
+    if path.exists():
+        path.unlink()
+
+
 def get_download_url(storage_key: str, expires_in: int = 900) -> str:
     if _using_r2():
         if settings.R2_PUBLIC_BASE_URL:

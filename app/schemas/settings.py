@@ -35,6 +35,7 @@ class SettingsResponse(BaseModel):
     last_refill_at: datetime
     oauth_connected: bool
     next_refill_at: datetime | None = None
+    created_at: datetime
 
     class Config:
         from_attributes = True
