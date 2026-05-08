@@ -18,3 +18,4 @@ docxtpl
 python-docx
 alembic
 cachetools
+email-validator
