@@ -2465,12 +2465,17 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Header: allow wrapping, auto height */
   .dashboard-header {
+    position: sticky;
+    top: 0;
+    z-index: 1000; /* Under sidebar (2000) but above content */
+    background: var(--bg-dark);
     height: auto;
     min-height: 56px;
     padding: 10px 16px;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .header-left {
@@ -2521,7 +2526,18 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Input area padding */
   .intake-container {
-    padding: 12px;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .intake-textarea {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+
+  .submit-idea-btn {
+    width: 36px;
+    height: 36px;
   }
 
   /* Greeting font sizes */
@@ -2529,8 +2545,15 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 28px;
   }
 
-  .dashboard-prompt {
-    font-size: 14px;
+  .intake-wrapper-bottom {
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    margin-top: auto;
+    padding-bottom: 24px;
+    background: linear-gradient(to top, var(--bg-dark) 90%, transparent);
+    z-index: 10;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
   }
 }
 
