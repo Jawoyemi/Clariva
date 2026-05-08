@@ -254,7 +254,8 @@ async def create_guest_session(
     db.add(guest_session)
     db.commit()
 
-    response = RedirectResponse(url=f"{FRONTEND_URL}/dashboard", status_code=302)
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(content={"status": "ok"})
     response.set_cookie(
         key="guest_token",
         value=temp_token,

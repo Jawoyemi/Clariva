@@ -40,16 +40,30 @@ const LoginModal = ({ isOpen, onClose }) => {
             <span>or</span>
           </div>
 
-          {/* Guest Access — form POST to get temp_token via cookie redirect */}
-          <form method="POST" action={`${API}/auth/guest`}>
-            <button type="submit" className="guest-btn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-              Continue as Guest
-            </button>
-          </form>
+          {/* Guest Access */}
+          <button
+            type="button"
+            className="guest-btn"
+            onClick={async () => {
+              try {
+                const res = await fetch(`${API}/auth/guest`, {
+                  method: 'POST',
+                  credentials: 'include',
+                });
+                if (res.ok || res.redirected) {
+                  window.location.href = `${window.location.origin}/dashboard`;
+                }
+              } catch (e) {
+                console.error('Guest login failed', e);
+              }
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Continue as Guest
+          </button>
 
           <p className="guest-disclaimer">
             Guest sessions last 30 minutes. You'll be asked to sign in to save your work.
