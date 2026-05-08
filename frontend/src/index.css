@@ -2315,3 +2315,109 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 14px;
   }
 }
+
+/* ============================================
+   DASHBOARD MOBILE RESPONSIVENESS
+   ============================================ */
+
+@media (max-width: 768px) {
+  /* Sidebar: position off-screen, slide in as overlay */
+  .dashboard-sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    height: 100vh;
+    width: 260px !important;
+    z-index: 200;
+    transition: left 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+  }
+
+  /* When sidebarOpen=true, no sidebar-collapsed class → slide in */
+  .dashboard-sidebar:not(.sidebar-collapsed) {
+    left: 0;
+  }
+
+  /* Overlay backdrop — only meaningful on mobile */
+  .sidebar-mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 199;
+    backdrop-filter: blur(2px);
+  }
+
+  /* Show hamburger button on mobile */
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Dashboard main takes full width */
+  .dashboard-main {
+    width: 100%;
+    flex: 1;
+  }
+
+  /* Header: allow wrapping, auto height */
+  .dashboard-header {
+    height: auto;
+    min-height: 56px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .header-left {
+    gap: 8px;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  /* Guest banner: compact on mobile */
+  .guest-banner {
+    font-size: 11px;
+    padding: 4px 8px;
+    gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
+
+  .guest-signin-link {
+    display: none; /* hide on mobile to save space */
+  }
+
+  /* Credit pill compact */
+  .credit-pill {
+    font-size: 12px;
+    padding: 4px 10px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* Spacer gone on mobile */
+  .header-spacer {
+    display: none;
+  }
+
+  /* Input area padding */
+  .intake-container {
+    padding: 12px;
+  }
+
+  /* Greeting font sizes */
+  .dashboard-greeting {
+    font-size: 28px;
+  }
+
+  .dashboard-prompt {
+    font-size: 14px;
+  }
+}
+

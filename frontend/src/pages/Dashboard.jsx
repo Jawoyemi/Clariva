@@ -123,7 +123,7 @@ const Countdown = ({ targetDate }) => {
 
 const Dashboard = () => {
   const userLoadData = useLoaderData();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [sidebarView, setSidebarView] = useState('chats');
   const mainRef = useRef(null);
   const [showLogin, setShowLogin] = useState(false);
