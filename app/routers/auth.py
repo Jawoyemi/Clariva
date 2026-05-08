@@ -26,7 +26,7 @@ from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-IS_PRODUCTION = os.environ.get("RAILWAY_ENVIRONMENT") is not None
+IS_PRODUCTION = os.environ.get("PRODUCTION", "false").lower() == "true"
 
 
 def limit_auth_guest(request: Request):
