@@ -2562,6 +2562,7 @@ h1, h2, h3, h4, h5, h6 {
   .intake-textarea {
     flex: 1 !important;
     width: 100% !important;
+    min-width: 0 !important;
     font-size: 16px !important;
     line-height: 1.3 !important;
     padding: 8px 0 !important;
@@ -2571,6 +2572,17 @@ h1, h2, h3, h4, h5, h6 {
     color: #fff !important;
     max-height: 140px !important;
     -webkit-appearance: none !important;
+  }
+
+  .intake-footer {
+    display: flex !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    width: auto !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .submit-idea-btn {
