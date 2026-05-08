@@ -3,10 +3,12 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Use a loader to fetch the current user profile WITHOUT using useEffect!
 const dashboardLoader = async () => {
   try {
-    const response = await fetch('http://localhost:8000/auth/me', {
+    const response = await fetch(`${API}/auth/me`, {
       credentials: 'include' // Send HttpOnly cookies (access_token or guest_token)
     });
     

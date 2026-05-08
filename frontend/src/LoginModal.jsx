@@ -1,5 +1,7 @@
 import React from 'react';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const LoginModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
@@ -22,7 +24,7 @@ const LoginModal = ({ isOpen, onClose }) => {
           {/* Google SSO Button */}
           <button 
             className="google-btn" 
-            onClick={() => { window.location.href = 'http://localhost:8000/auth/login'; }}
+            onClick={() => { window.location.href = `${API}/auth/login`; }}
           >
             <svg className="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -39,7 +41,7 @@ const LoginModal = ({ isOpen, onClose }) => {
           </div>
 
           {/* Guest Access — form POST to get temp_token via cookie redirect */}
-          <form method="POST" action="http://localhost:8000/auth/guest">
+          <form method="POST" action={`${API}/auth/guest`}>
             <button type="submit" className="guest-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
