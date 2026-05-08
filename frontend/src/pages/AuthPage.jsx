@@ -42,14 +42,15 @@ const AuthPage = () => {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.detail || 'Authentication failed');
+        const data = await res.json().catch(() => ({}));
+        setError(data.detail || `Server error (${res.status}). Please try again.`);
         setLoading(false);
         return;
       }
 
       navigate('/dashboard');
     } catch (err) {
+      console.error('Auth error:', err);
       setError('Connection error. Please try again.');
       setLoading(false);
     }
