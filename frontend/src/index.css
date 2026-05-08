@@ -2355,6 +2355,10 @@ h1, h2, h3, h4, h5, h6 {
     gap: 16px;
   }
 
+  .intake-hint, .typing-status, .cleaning-status {
+    display: none !important;
+  }
+
   .nav-item {
     display: none;
   }
@@ -2465,9 +2469,11 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Header: allow wrapping, auto height */
   .dashboard-header {
-    position: sticky;
+    position: fixed !important; /* Force stay on top of keyboard scrolls */
     top: 0;
-    z-index: 1000; /* Under sidebar (2000) but above content */
+    left: 0;
+    width: 100%;
+    z-index: 1000;
     background: var(--bg-dark);
     height: auto;
     min-height: 56px;
