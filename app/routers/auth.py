@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from datetime import datetime, timedelta
@@ -24,6 +25,8 @@ import uuid
 from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+IS_PRODUCTION = os.environ.get("RAILWAY_ENVIRONMENT") is not None
 
 
 def limit_auth_guest(request: Request):
@@ -154,20 +157,20 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
     db.add(db_refresh_token)
     db.commit()
 
-    response = RedirectResponse(url="http://localhost:5173/dashboard")
+    response = RedirectResponse(url=f"{FRONTEND_URL}/dashboard")
     response.set_cookie(
-        key="access_token", 
-        value=access_token, 
-        httponly=True, 
-        samesite="lax",
-        secure=False 
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
     )
     response.set_cookie(
-        key="refresh_token", 
-        value=refresh_token, 
-        httponly=True, 
-        samesite="lax",
-        secure=False
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
     )
     
     return response
@@ -251,14 +254,14 @@ async def create_guest_session(
     db.add(guest_session)
     db.commit()
 
-    response = RedirectResponse(url="http://localhost:5173/dashboard", status_code=302)
+    response = RedirectResponse(url=f"{FRONTEND_URL}/dashboard", status_code=302)
     response.set_cookie(
         key="guest_token",
         value=temp_token,
         httponly=True,
-        samesite="lax",
-        secure=False,
-        max_age=1800  # 30 minutes
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
+        max_age=1800,
     )
     return response
 
@@ -275,7 +278,7 @@ async def logout(request: Request, db = Depends(get_db)):
             db_token.revoked = True
             db.commit()
 
-    response = RedirectResponse(url="http://localhost:5173/", status_code=302)
+    response = RedirectResponse(url=f"{FRONTEND_URL}/", status_code=302)
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     response.delete_cookie("guest_token")
