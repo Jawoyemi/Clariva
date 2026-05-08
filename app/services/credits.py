@@ -40,6 +40,8 @@ def _ensure_aware(value: datetime | None) -> datetime:
 
 
 def get_plan(owner_or_user) -> str:
+    if isinstance(owner_or_user, GuestSession):
+        return "guest"
     if isinstance(owner_or_user, dict):
         if owner_or_user["type"] == "guest":
             return "guest"
