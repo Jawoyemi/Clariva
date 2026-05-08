@@ -2212,3 +2212,106 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 36px;
   }
 }
+
+/* ============================================
+   LANDING PAGE MOBILE RESPONSIVENESS
+   ============================================ */
+
+@media (max-width: 992px) {
+  .hero-section {
+    flex-direction: column;
+    padding: 80px 5% 80px;
+    min-height: auto;
+    gap: 48px;
+    text-align: center;
+    align-items: center;
+  }
+
+  .hero-content {
+    max-width: 100%;
+  }
+
+  .hero-cta {
+    justify-content: center;
+  }
+
+  .hero-badge {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-mockup {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .mockup-float-card {
+    right: -10px;
+    bottom: -10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 14px 20px;
+  }
+
+  .nav-links {
+    gap: 16px;
+  }
+
+  .nav-item {
+    display: none;
+  }
+
+  .nav-links .btn-primary {
+    font-size: 13px;
+    padding: 10px 16px;
+    white-space: nowrap;
+  }
+
+  .hero-title {
+    font-size: 44px;
+    letter-spacing: -1px;
+  }
+
+  .hero-section {
+    padding: 70px 5% 60px;
+    gap: 36px;
+  }
+
+  .hero-mockup {
+    max-width: 100%;
+  }
+
+  .hero-subtitle {
+    font-size: 15px;
+  }
+
+  .steps-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-title {
+    font-size: 28px;
+  }
+
+  .cta-title {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-section {
+    padding: 60px 20px 50px;
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
+  }
+}
