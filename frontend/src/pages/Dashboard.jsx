@@ -42,7 +42,7 @@ const SUGGESTION_GROUPS = [
   ],
 ];
 
-const API = 'http://localhost:8000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const getRotatingSuggestions = (date = new Date()) => {
   const startOfYear = new Date(date.getFullYear(), 0, 0);
