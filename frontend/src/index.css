@@ -2540,53 +2540,44 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .intake-container {
-    padding: 4px 8px 4px 16px;
-    border-radius: 24px; /* Pill shape */
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    display: flex;
-    align-items: flex-end; /* Align button to bottom of growing textarea */
-    gap: 4px;
-    min-height: 44px;
+    padding: 6px 8px 6px 18px !important;
+    border-radius: 30px !important; /* Force pill shape */
+    background: rgba(255, 255, 255, 0.12) !important; /* Slightly more visible */
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important; /* Safari support */
+    display: flex !important;
+    align-items: flex-end !important;
+    gap: 6px !important;
+    min-height: 48px !important;
   }
 
   .intake-textarea {
-    flex: 1;
-    width: auto;
-    font-size: 16px; /* Prevents auto-zoom on iOS */
-    line-height: 1.4;
-    padding: 10px 0;
-    background: transparent;
-    border: none;
+    flex: 1 !important;
+    width: 100% !important;
+    font-size: 16px !important; /* Critical for Safari zoom */
+    line-height: 1.4 !important;
+    padding: 10px 0 !important;
+    background: transparent !important;
+    border: none !important;
     outline: none !important;
-    color: var(--text-light);
-    max-height: 120px;
-  }
-
-  .intake-textarea:focus {
-    box-shadow: none;
-  }
-
-  .intake-footer {
-    display: flex;
-    padding: 4px 0;
-    margin: 0;
-    border: none;
+    color: #fff !important;
+    max-height: 140px !important;
+    -webkit-appearance: none !important; /* Remove Safari default styling */
   }
 
   .submit-idea-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
     background: var(--accent-gold) !important;
-    color: #000;
-    box-shadow: 0 2px 8px rgba(192, 158, 96, 0.3);
-    flex-shrink: 0;
-  }
-
-  .intake-hint {
-    display: none;
+    color: #000 !important;
+    box-shadow: 0 2px 10px rgba(192, 158, 96, 0.4) !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: none !important;
   }
 
   /* Greeting font sizes */
