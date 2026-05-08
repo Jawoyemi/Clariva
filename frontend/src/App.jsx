@@ -2,6 +2,7 @@ import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
+import AuthPage from './pages/AuthPage';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -29,6 +30,14 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <LandingPage />
+  },
+  {
+    path: "/login",
+    element: <AuthPage />
+  },
+  {
+    path: "/register",
+    element: <AuthPage />
   },
   {
     path: "/dashboard",

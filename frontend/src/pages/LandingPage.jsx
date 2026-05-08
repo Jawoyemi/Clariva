@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import '../index.css';
 import Logo from '../Logo';
-import LoginModal from '../LoginModal';
 
 const LandingPage = () => {
-  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
     // Scroll to top on refresh
@@ -36,7 +35,7 @@ const LandingPage = () => {
         <div className="nav-links anim-fade-in" style={{ animationDelay: '0.1s' }}>
           <a href="#how" className="nav-item">How it works</a>
           <a href="#features" className="nav-item">Features</a>
-          <button className="btn-primary" onClick={() => setIsLoginOpen(true)}>Try it for free</button>
+          <Link to="/register" className="btn-primary">Try it for free</Link>
         </div>
       </nav>
 
@@ -223,7 +222,7 @@ const LandingPage = () => {
         <div className="cta-content scroll-anim">
           <h2 className="cta-title">Ready to build something?</h2>
           <p className="cta-subtitle">Generate your first SOW or PRD free. No account required.</p>
-          <button className="btn-primary" onClick={() => setIsLoginOpen(true)}>Get started for free</button>
+          <Link to="/register" className="btn-primary">Get started for free</Link>
         </div>
       </section>
 
@@ -273,8 +272,7 @@ const LandingPage = () => {
         </div>
       </footer>
 
-      {/* Login Modal Overlay */}
-      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      {/* Auth logic moved to dedicated /login and /register pages */}
     </div>
   );
 };
