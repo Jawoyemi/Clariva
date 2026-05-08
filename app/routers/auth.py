@@ -13,7 +13,10 @@ from app.core.security import (
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.models.session import GuestSession
-from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenResponse
+from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenResponse, RegisterRequest, LoginRequest
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 from app.config import settings
 from app.services.credits import apply_refill, next_refill_at
 from app.services.email import send_welcome_email
@@ -88,6 +91,128 @@ async def get_me(request: Request, db = Depends(get_db)):
                 }
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+@router.post("/register")
+async def register(
+    body: RegisterRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db = Depends(get_db),
+    _=Depends(limit_auth_login),
+):
+    email = body.email.strip().lower()
+    existing = db.query(User).filter(func.lower(User.email) == email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists"
+        )
+
+    if len(body.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters"
+        )
+
+    user = User(
+        email=email,
+        name=body.name.strip(),
+        display_name=body.name.strip(),
+        hashed_password=pwd_context.hash(body.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    background_tasks.add_task(send_welcome_email, email=user.email, name=user.name)
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    db_refresh_token = RefreshToken(
+        user_id=user.id,
+        token=refresh_token,
+        expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    )
+    db.add(db_refresh_token)
+    db.commit()
+
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(content={"status": "ok", "name": user.display_name})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
+    )
+    return response
+
+
+@router.post("/login/email")
+async def login_email(
+    body: LoginRequest,
+    request: Request,
+    db = Depends(get_db),
+    _=Depends(limit_auth_login),
+):
+    email = body.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+
+    if not user or not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    if not pwd_context.verify(body.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    if not user.is_active or user.deleted_at:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated"
+        )
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    db_refresh_token = RefreshToken(
+        user_id=user.id,
+        token=refresh_token,
+        expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    )
+    db.add(db_refresh_token)
+    db.commit()
+
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(content={"status": "ok", "name": user.display_name or user.name})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_PRODUCTION,
+    )
+    return response
+
 
 @router.get("/login")
 async def login(request: Request, _=Depends(limit_auth_login)):
