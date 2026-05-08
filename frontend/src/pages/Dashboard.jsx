@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLoaderData } from 'react-router-dom';
+import { useLoaderData, Link } from 'react-router-dom';
 import '../index.css';
 import Logo from '../Logo';
 import LoginModal from '../LoginModal';
@@ -1026,7 +1026,11 @@ const Dashboard = () => {
       {/* Sidebar */}
       <aside className={`dashboard-sidebar${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
         <div className="sidebar-header">
-          {sidebarOpen && <Logo className="sidebar-logo" style={{ width: '100px', height: 'auto' }} />}
+          {sidebarOpen && (
+            <Link to="/" className="sidebar-logo-link">
+              <Logo className="sidebar-logo" style={{ width: '100px', height: 'auto' }} />
+            </Link>
+          )}
           <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} title={sidebarOpen ? 'Collapse' : 'Expand'}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {sidebarOpen ? <path d="M15 18l-6-6 6-6" /> : <path d="M9 18l6-6-6-6" />}
@@ -1188,8 +1192,8 @@ const Dashboard = () => {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-                Guest session — your work won't be saved.
-                <button className="guest-signin-link" onClick={() => setShowLogin(true)}>Sign in to save →</button>
+                <span className="guest-banner-text">Guest session — your work won't be saved.</span>
+                <Link to="/login" className="guest-signin-link">Sign in to save</Link>
               </div>
             )}
           </div>

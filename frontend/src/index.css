@@ -2471,16 +2471,28 @@ h1, h2, h3, h4, h5, h6 {
   /* Guest banner: compact on mobile */
   .guest-banner {
     font-size: 11px;
-    padding: 4px 8px;
-    gap: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 180px;
+    padding: 4px 10px;
+    gap: 8px;
+    max-width: none;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .guest-banner-text {
+    display: none;
+  }
+
+  .guest-banner::after {
+    content: 'Guest Session';
+    font-weight: 600;
   }
 
   .guest-signin-link {
-    display: none; /* hide on mobile to save space */
+    display: block !important;
+    white-space: nowrap;
+    background: rgba(192, 158, 96, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
   }
 
   /* Credit pill compact */
