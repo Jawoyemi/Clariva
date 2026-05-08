@@ -4,7 +4,7 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import AuthPage from './pages/AuthPage';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API = import.meta.env.VITE_API_URL || '/api';
 
 // Use a loader to fetch the current user profile WITHOUT using useEffect!
 const dashboardLoader = async () => {
