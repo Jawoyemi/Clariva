@@ -91,7 +91,6 @@ async def get_me(request: Request, db = Depends(get_db)):
 
 @router.get("/login")
 async def login(request: Request, _=Depends(limit_auth_login)):
-    # Let authlib use the redirect_uri from the config
     return await oauth.google.authorize_redirect(request)
 
 
