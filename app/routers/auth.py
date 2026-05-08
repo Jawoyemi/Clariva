@@ -16,7 +16,7 @@ from app.models.session import GuestSession
 from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenResponse, RegisterRequest, LoginRequest
 from passlib.context import CryptContext
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 from app.config import settings
 from app.services.credits import apply_refill, next_refill_at
 from app.services.email import send_welcome_email

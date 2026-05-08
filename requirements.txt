@@ -6,7 +6,8 @@ python-dotenv
 pydantic-settings
 authlib
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[argon2]
+argon2-cffi
 boto3
 groq
 anthropic
