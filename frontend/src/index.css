@@ -2414,32 +2414,39 @@ h1, h2, h3, h4, h5, h6 {
    DASHBOARD MOBILE RESPONSIVENESS
    ============================================ */
 
+.sidebar-mobile-overlay {
+  display: none;
+}
+
 @media (max-width: 768px) {
   /* Sidebar: position off-screen, slide in as overlay */
   .dashboard-sidebar {
     position: fixed;
     top: 0;
-    left: -280px;
-    height: 100vh;
-    width: 260px !important;
-    z-index: 200;
-    transition: left 0.25s ease;
-    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
-  }
-
-  /* When sidebarOpen=true, no sidebar-collapsed class → slide in */
-  .dashboard-sidebar:not(.sidebar-collapsed) {
     left: 0;
+    bottom: 0;
+    width: 280px;
+    height: 100vh;
+    z-index: 2000; /* Extremely high to beat everything */
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #12141c; /* Solid dark background */
+    box-shadow: 20px 0 50px rgba(0,0,0,0.5);
+    display: flex !important;
   }
 
-  /* Overlay backdrop — only meaningful on mobile */
+  .dashboard-sidebar:not(.sidebar-collapsed) {
+    transform: translateX(0) !important;
+  }
+
   .sidebar-mobile-overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.55);
-    z-index: 199;
-    backdrop-filter: blur(2px);
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 1999;
+    animation: fadeIn 0.3s ease-out;
   }
 
   /* Show hamburger button on mobile */
