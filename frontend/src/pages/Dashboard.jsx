@@ -1230,7 +1230,7 @@ const Dashboard = () => {
                   <textarea
                     ref={textareaRef}
                     className="intake-textarea"
-                    placeholder={typingPlaceholder || "Describe the product you want to document…"}
+                    placeholder={window.innerWidth < 768 ? "Describe the product you want to document." : (typingPlaceholder || "Describe the product you want to document…")}
                     rows={1}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
@@ -1337,7 +1337,7 @@ const Dashboard = () => {
                     placeholder={
                       phase === 'clarifying' ? 'Answer this question, or type "continue" to move on…'
                       : phase === 'choose_type' ? 'Type SOW, PRD, or both…'
-                      : typingPlaceholder || 'Ask Clariva something…'
+                      : (window.innerWidth < 768 ? 'Ask Clariva something.' : (typingPlaceholder || 'Ask Clariva something…'))
                     }
                     rows={1}
                     value={inputValue}
