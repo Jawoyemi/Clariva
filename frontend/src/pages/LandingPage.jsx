@@ -64,7 +64,7 @@ const LandingPage = () => {
             knowledge required.
           </p>
           <div className="hero-cta anim-fade-up" style={{ animationDelay: '0.45s' }}>
-            <button className="btn-primary btn-glow" onClick={() => setIsLoginOpen(true)}>Try it for free</button>
+            <a href="#features" className="btn-primary btn-glow">See Features</a>
             <a href="#how" className="btn-link">
               See how it works
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
