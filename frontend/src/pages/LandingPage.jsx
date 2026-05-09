@@ -247,9 +247,9 @@ const LandingPage = () => {
         <div className="footer-col">
           <h4>COMPANY</h4>
           <div className="footer-links">
-            <a href="#" className="footer-link">Privacy</a>
-            <a href="#" className="footer-link">Terms</a>
-            <a href="#" className="footer-link">Contact</a>
+            <Link to="/privacy" className="footer-link">Privacy</Link>
+            <Link to="/terms" className="footer-link">Terms</Link>
+            <a href="mailto:support@clarivaai.tech" className="footer-link">Contact</a>
           </div>
         </div>
         

@@ -3,6 +3,8 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import AuthPage from './pages/AuthPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
@@ -43,6 +45,14 @@ const router = createBrowserRouter([
     path: "/dashboard",
     element: <Dashboard />,
     loader: dashboardLoader
+  },
+  {
+    path: "/privacy",
+    element: <PrivacyPage />
+  },
+  {
+    path: "/terms",
+    element: <TermsPage />
   }
 ]);
 
