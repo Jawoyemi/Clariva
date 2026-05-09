@@ -170,7 +170,7 @@ const AuthPage = () => {
             {error && <div className="auth-error-box">{error}</div>}
 
             <button type="submit" className="btn-primary auth-btn" disabled={loading}>
-              {loading ? 'Processing...' : (isRegister ? 'Create Account' : 'Sign In')}
+              {loading ? (isRegister ? 'Signing up...' : 'Signing in...') : (isRegister ? 'Create Account' : 'Sign In')}
             </button>
           </form>
 

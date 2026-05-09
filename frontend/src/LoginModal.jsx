@@ -121,7 +121,7 @@ const LoginModal = ({ isOpen, onClose }) => {
 
             <button type="submit" className="btn-primary auth-submit" disabled={loading}>
               {loading
-                ? (mode === 'login' ? 'Signing in...' : 'Creating account...')
+                ? (mode === 'login' ? 'Signing in...' : 'Signing up...')
                 : (mode === 'login' ? 'Sign in' : 'Create account')}
             </button>
           </form>
