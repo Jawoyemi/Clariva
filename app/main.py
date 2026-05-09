@@ -22,9 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+IS_PRODUCTION = os.environ.get("PRODUCTION", "false").lower() == "true"
+
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.SECRET_KEY
+    secret_key=settings.SECRET_KEY,
+    https_only=IS_PRODUCTION,
+    same_site="lax"
 )
 
 app.include_router(auth.router)
