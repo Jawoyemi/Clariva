@@ -1460,7 +1460,7 @@ const Dashboard = () => {
                     ) : (
                       settingsData.credits_balance >= settingsData.credits_max && (
                         <div className="settings-credit-full">
-                          Balance Full ✨
+                          Balance Full
                         </div>
                       )
                     )}
