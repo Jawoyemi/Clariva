@@ -11,10 +11,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    # Email Settings (SendGrid)
-    SENDGRID_API_KEY: str
-    SENDGRID_FROM_EMAIL: str
-    SENDGRID_FROM_NAME: str = "Clariva"
+    # Email Settings (Sender.net or similar)
+    EMAIL_API_KEY: str
+    EMAIL_FROM_EMAIL: str
+    EMAIL_FROM_NAME: str = "Clariva"
 
     GROQ_API_KEY: str
 
