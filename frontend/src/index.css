@@ -3001,3 +3001,32 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 32px;
   }
 }
+
+/* Google Auth Buttons */
+.google-auth-btn, .google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #374151;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.google-auth-btn:hover, .google-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.google-auth-btn svg, .google-btn svg {
+  flex-shrink: 0;
+}
