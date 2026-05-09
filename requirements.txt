@@ -14,7 +14,7 @@ anthropic
 weasyprint
 httpx
 itsdangerous
-fastapi-mail
+sendgrid
 docxtpl
 python-docx
 alembic

@@ -11,15 +11,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    # Email Settings
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str 
-    MAIL_FROM: str 
-    MAIL_PORT: int 
-    MAIL_SERVER: str 
-    MAIL_FROM_NAME: str = "Clariva"
-    MAIL_STARTTLS: bool = True
-    MAIL_SSL_TLS: bool = False
+    # Email Settings (SendGrid)
+    SENDGRID_API_KEY: str
+    SENDGRID_FROM_EMAIL: str
+    SENDGRID_FROM_NAME: str = "Clariva"
 
     GROQ_API_KEY: str
 

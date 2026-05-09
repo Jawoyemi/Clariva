@@ -1,36 +1,38 @@
-from fastapi_mail import FastMail, MessageSchema, MessageType, ConnectionConfig
-from app.config import settings
-from pydantic import EmailStr
-from pathlib import Path
 import logging
+from pathlib import Path
+
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, HtmlContent
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-TEMPLATE_FOLDER = Path(__file__).parent.parent / "templates" / "email"
+TEMPLATE_PATH = Path(__file__).parent.parent / "templates" / "email" / "welcome.html"
 
-MAIL_CONFIG = ConnectionConfig(
-    MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
-    MAIL_FROM=settings.MAIL_FROM,
-    MAIL_PORT=settings.MAIL_PORT,
-    MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_FROM_NAME=settings.MAIL_FROM_NAME,
-    MAIL_STARTTLS=settings.MAIL_STARTTLS,
-    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
-    TEMPLATE_FOLDER=TEMPLATE_FOLDER,
-)
-MAIL_CLIENT = FastMail(MAIL_CONFIG)
 
-async def send_welcome_email(email: EmailStr, name: str):
+def _render_welcome_html(name: str) -> str:
+    """Load the welcome template and substitute the name placeholder."""
+    html = TEMPLATE_PATH.read_text(encoding="utf-8")
+    return html.replace("{{name}}", name)
+
+
+async def send_welcome_email(email: str, name: str):
+    """Send a welcome email via SendGrid's HTTP API (no SMTP needed)."""
     try:
-        message = MessageSchema(
+        html_content = _render_welcome_html(name)
+
+        message = Mail(
+            from_email=(settings.SENDGRID_FROM_EMAIL, settings.SENDGRID_FROM_NAME),
+            to_emails=email,
             subject="Welcome to Clariva!",
-            recipients=[email],
-            template_body={"name": name},
-            subtype=MessageType.html
+            html_content=HtmlContent(html_content),
         )
 
-        await MAIL_CLIENT.send_message(message, template_name="welcome.html")
-        logger.info("Welcome email sent successfully to %s", email)
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+        logger.info(
+            "Welcome email sent to %s (status %s)", email, response.status_code
+        )
     except Exception:
         logger.exception("Failed to send welcome email to %s", email)
