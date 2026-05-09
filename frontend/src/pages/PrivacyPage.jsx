@@ -32,7 +32,7 @@ const PrivacyPage = () => {
           <h2>2. Information We Collect</h2>
           <p>We collect information that you provide directly to us when you register for an account, use our AI generation tools, or communicate with us. This may include:</p>
           <ul>
-            <li><strong>Personal Information:</strong> Name, email address, and account credentials.</li>
+            <li><strong>Personal Information:</strong> Name, email address, and account credentials. When you use Google Sign-In, we only request and store your <code>openid</code>, <code>email</code>, and <code>profile</code> information as provided by Google.</li>
             <li><strong>Usage Data:</strong> Information about how you use our website, including document generation history and interaction with our AI.</li>
             <li><strong>Device Information:</strong> IP address, browser type, and operating system.</li>
           </ul>
