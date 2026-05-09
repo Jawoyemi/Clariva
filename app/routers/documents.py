@@ -45,6 +45,14 @@ def limit_document_revise(request: Request):
     enforce_limit(request, "document_revise")
 
 
+def _ensure_not_guest(owner):
+    if owner["type"] == "guest":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to generate and save documents"
+        )
+
+
 def _owner_fields(owner):
     if owner["type"] == "user":
         return {"user_id": owner["data"].id, "guest_session_id": None}
@@ -603,6 +611,7 @@ async def compile_sow(
     owner=Depends(get_current_user_or_guest),
     _=Depends(limit_document_compile),
 ):
+    _ensure_not_guest(owner)
     brief = body.get("brief")
     answers = body.get("answers", [])
     sow_outline = body.get("sow_outline", [])
@@ -648,6 +657,7 @@ async def compile_prd(
     owner=Depends(get_current_user_or_guest),
     _=Depends(limit_document_compile),
 ):
+    _ensure_not_guest(owner)
     brief = body.get("brief")
     answers = body.get("answers", [])
     prd_outline = body.get("prd_outline", [])
@@ -693,6 +703,7 @@ async def compile_both(
     owner=Depends(get_current_user_or_guest),
     _=Depends(limit_document_compile),
 ):
+    _ensure_not_guest(owner)
     brief = body.get("brief")
     answers = body.get("answers", [])
     sow_outline = body.get("sow_outline", [])
