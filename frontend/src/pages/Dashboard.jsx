@@ -156,6 +156,8 @@ const Dashboard = () => {
   const currentChatIdRef = useRef(null);
   const saveQueueRef = useRef(Promise.resolve());
   const requestInFlightRef = useRef(false);
+  const [refillCountdown, setRefillCountdown] = useState(null);
+  const refillTimerRef = useRef(null);
   const textareaRef = useRef(null);
 
   const userName = userLoadData?.name || 'Guest';
@@ -346,6 +348,46 @@ const Dashboard = () => {
     }
   };
 
+  const startRefillTimer = (nextRefillAt) => {
+    if (refillTimerRef.current) clearInterval(refillTimerRef.current);
+    if (!nextRefillAt) {
+      setRefillCountdown(null);
+      return;
+    }
+
+    const update = () => {
+      const now = new Date().getTime();
+      const target = new Date(nextRefillAt).getTime();
+      const diff = target - now;
+
+      if (diff <= 0) {
+        setRefillCountdown('Refreshing...');
+        if (refillTimerRef.current) clearInterval(refillTimerRef.current);
+        loadCreditBalance(); // Refresh balance when timer hits zero
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setRefillCountdown(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    };
+
+    update();
+    refillTimerRef.current = setInterval(update, 1000);
+  };
+
+  const stopRefillTimer = () => {
+    if (refillTimerRef.current) {
+      clearInterval(refillTimerRef.current);
+      refillTimerRef.current = null;
+    }
+    setRefillCountdown(null);
+  };
+
   const loadSettings = async () => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
     if (isGuest) {
@@ -356,7 +398,11 @@ const Dashboard = () => {
     try {
       const res = await fetch(`${API}/settings`, { credentials: 'include' });
       if (!res.ok) throw new Error(formatApiError(await res.json(), 'Failed to load settings'));
-      setSettingsData(await res.json());
+      const data = await res.json();
+      setSettingsData(data);
+      if (data.next_refill_at) {
+        startRefillTimer(data.next_refill_at);
+      }
       setShowSettings(true);
     } catch (error) {
       addMessage('error', `❌ ${error.message}`);
@@ -1387,10 +1433,53 @@ const Dashboard = () => {
                 <h2>Settings</h2>
                 <p>Profile details help Clariva tailor generated documents.</p>
               </div>
-              <button className="modal-close" type="button" onClick={() => setShowSettings(false)}>×</button>
+              <button className="modal-close" type="button" onClick={() => { stopRefillTimer(); setShowSettings(false); }}>×</button>
             </div>
 
             <div className="settings-grid">
+              <section className="settings-section-card">
+                <h3>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  Credits & Usage
+                </h3>
+                <div className="settings-credits-container">
+                  <div className="settings-credits-row">
+                    <div className="settings-credits-info">
+                      <span className="settings-credits-label">Available Balance</span>
+                      <span className="settings-credits-value">
+                        {settingsData.credits_balance} / {settingsData.credits_max}
+                      </span>
+                    </div>
+                    {refillCountdown ? (
+                      <div className="settings-credits-timer">
+                        <span className="settings-timer-label">Next Refill In</span>
+                        <span className="settings-timer-value">{refillCountdown}</span>
+                      </div>
+                    ) : (
+                      settingsData.credits_balance >= settingsData.credits_max && (
+                        <div className="settings-credit-full">
+                          Balance Full ✨
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <div className="settings-credits-progress">
+                    <div 
+                      className="settings-credits-bar" 
+                      style={{ width: `${Math.min(100, (settingsData.credits_balance / settingsData.credits_max) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <p className="settings-credit-note">
+                  Credits are automatically replenished based on your plan. 
+                  {settingsData.plan === 'pro' ? ' You are on the Pro plan (25 credits every 3h).' : 
+                   settingsData.plan === 'free' ? ' You are on the Free plan (10 credits every 6h).' : 
+                   ' Guest sessions receive 10 credits every 30m.'}
+                </p>
+              </section>
+
               <section className="settings-section-card">
                 <h3>Account Information</h3>
                 <label>
