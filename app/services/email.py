@@ -33,7 +33,10 @@ def send_welcome_email(email: str, name: str):
             html_content=HtmlContent(html_content),
         )
 
-        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        api_key = settings.SENDGRID_API_KEY.strip()
+        logger.debug("Attempting to send email with API key: %s... (length: %s)", api_key[:4], len(api_key))
+
+        sg = SendGridAPIClient(api_key)
         response = sg.send(message)
         
         if response.status_code >= 200 and response.status_code < 300:
