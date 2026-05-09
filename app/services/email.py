@@ -1,6 +1,9 @@
 import logging
 from pathlib import Path
-import httpx
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,40 +18,28 @@ def _render_welcome_html(name: str) -> str:
 
 
 def send_welcome_email(email: str, name: str):
-    """Send a welcome email via Sender.net API."""
-    if not settings.EMAIL_API_KEY:
-        logger.error("EMAIL_API_KEY is not set. Skipping welcome email.")
+    """Send a welcome email via SMTP (Outlook/Gmail)."""
+    if not settings.SMTP_PASSWORD:
+        logger.error("SMTP_PASSWORD is not set. Skipping welcome email.")
         return
 
     try:
         html_content = _render_welcome_html(name)
 
-        payload = {
-            "email": email,
-            "subject": "Welcome to Clariva!",
-            "from": settings.EMAIL_FROM_EMAIL,
-            "from_name": settings.EMAIL_FROM_NAME,
-            "html": html_content
-        }
+        # Create message
+        msg = MIMEMultipart()
+        msg["From"] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>"
+        msg["To"] = email
+        msg["Subject"] = "Welcome to Clariva!"
+        msg.attach(MIMEText(html_content, "html"))
 
-        headers = {
-            "Authorization": f"Bearer {settings.EMAIL_API_KEY.strip()}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
-        with httpx.Client() as client:
-            response = client.post(
-                "https://api.sender.net/v2/emails/transactional",
-                json=payload,
-                headers=headers,
-                timeout=10.0
-            )
+        # Send via SMTP
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            server.starttls()  # Secure the connection
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.send_message(msg)
             
-        if response.status_code >= 200 and response.status_code < 300:
-            logger.info("Welcome email sent to %s via Sender.net (Status: %s)", email, response.status_code)
-        else:
-            logger.error("Sender.net error for %s: Status %s, Body: %s", email, response.status_code, response.text)
+        logger.info("Welcome email sent to %s via SMTP (Status: Success)", email)
             
     except Exception as e:
-        logger.exception("Failed to send welcome email to %s: %s", email, str(e))
+        logger.exception("Failed to send welcome email to %s via SMTP: %s", email, str(e))
