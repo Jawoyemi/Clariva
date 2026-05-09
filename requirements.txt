@@ -20,3 +20,4 @@ python-docx
 alembic
 cachetools
 email-validator
+resend
