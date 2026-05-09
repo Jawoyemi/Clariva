@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from app.config import settings
 from app.database import Base, engine
 from app.routers import auth, documents, export, token, chat, settings as settings_router, credits
@@ -13,6 +14,8 @@ app = FastAPI(
     description="Clariva API",
     version="1.0.0"
 )
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 app.add_middleware(
     CORSMiddleware,
