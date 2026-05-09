@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    # Email Settings (SMTP)
+
     SMTP_HOST: str = "smtp-mail.outlook.com"
     SMTP_PORT: int = 587
     SMTP_USER: str
