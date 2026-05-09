@@ -347,6 +347,7 @@ const Dashboard = () => {
   };
 
   const loadSettings = async () => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
     if (isGuest) {
       setShowLogin(true);
       return;
@@ -446,6 +447,7 @@ const Dashboard = () => {
   };
 
   const resetConversation = () => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
     setMessages([]);
     setPhase('idle');
     setClarifyingQuestions([]);
@@ -459,6 +461,7 @@ const Dashboard = () => {
   };
 
   const startDocumentChat = (document) => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
     currentChatIdRef.current = null;
     setCurrentChatId(null);
     setMessages([]);
@@ -491,6 +494,7 @@ const Dashboard = () => {
   };
 
   const loadChatSession = async (sessionId) => {
+    if (window.innerWidth <= 768) setSidebarOpen(false);
     try {
       const res = await fetch(`${API}/chat/sessions/${sessionId}`, {
         credentials: 'include',
