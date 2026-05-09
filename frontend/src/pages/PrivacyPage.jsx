@@ -25,7 +25,7 @@ const PrivacyPage = () => {
 
         <section>
           <h2>1. Introduction</h2>
-          <p>Welcome to Clariva ("we," "our," or "us"). We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website, clarivaai.tech.</p>
+          <p>Welcome to Clariva. We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you visit our website, clarivaai.tech.</p>
         </section>
 
         <section>
