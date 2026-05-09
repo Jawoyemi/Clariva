@@ -223,7 +223,7 @@ async def login(request: Request, _=Depends(limit_auth_login)):
 @router.get("/callback")
 async def callback(request: Request, background_tasks: BackgroundTasks, db = Depends(get_db)):
     try:
-        token = await oauth.google.authorize_access_token(request, redirect_uri=settings.GOOGLE_REDIRECT_URI)
+        token = await oauth.google.authorize_access_token(request)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
