@@ -11,11 +11,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    SMTP_HOST: str = "smtp-mail.outlook.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    
+
     RESEND_API_KEY: Optional[str] = None
     EMAIL_FROM_EMAIL: str
     EMAIL_FROM_NAME: str = "Clariva"
