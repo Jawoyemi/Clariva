@@ -34,7 +34,8 @@ def send_welcome_email(email: str, name: str):
         )
 
         api_key = settings.SENDGRID_API_KEY.strip()
-        logger.debug("Attempting to send email with API key: %s... (length: %s)", api_key[:4], len(api_key))
+        logger.info("Email debug - From: %s, Key start: %s, Key end: %s, Length: %s", 
+                    settings.SENDGRID_FROM_EMAIL, api_key[:6], api_key[-4:], len(api_key))
 
         sg = SendGridAPIClient(api_key)
         response = sg.send(message)
