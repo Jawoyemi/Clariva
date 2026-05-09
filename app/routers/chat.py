@@ -214,7 +214,7 @@ async def get_chat_session(
     messages = (
         db.query(ChatMessageRecord)
         .filter(ChatMessageRecord.chat_session_id == session.id)
-        .order_by(ChatMessageRecord.created_at.asc())
+        .order_by(ChatMessageRecord.created_at.asc(), ChatMessageRecord.id.asc())
         .all()
     )
     payload = _session_payload(session)

@@ -154,6 +154,7 @@ const Dashboard = () => {
   const [showIndividualDocs, setShowIndividualDocs] = useState(false);
   const [typingPlaceholder, setTypingPlaceholder] = useState('');
   const currentChatIdRef = useRef(null);
+  const saveQueueRef = useRef(Promise.resolve());
   const requestInFlightRef = useRef(false);
   const textareaRef = useRef(null);
 
@@ -258,29 +259,32 @@ const Dashboard = () => {
     return session.id;
   };
 
-  const saveMessage = async (role, content, meta) => {
+  const saveMessage = (role, content, meta) => {
     if (meta?.typing) return;
     if (!['user', 'assistant', 'error'].includes(role)) return;
 
-    try {
-      const titleSource = meta?.document?.title || content;
-      const sessionId = await ensureChatSession(cleanChatTitle(titleSource).slice(0, 60));
-      if (!sessionId) return;
+    // Use a queue to ensure messages are saved sequentially and prevent race conditions
+    saveQueueRef.current = saveQueueRef.current.then(async () => {
+      try {
+        const titleSource = meta?.document?.title || content;
+        const sessionId = await ensureChatSession(cleanChatTitle(titleSource).slice(0, 60));
+        if (!sessionId) return;
 
-      await fetch(`${API}/chat/sessions/${sessionId}/messages`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role,
-          content,
-          metadata: meta || null,
-        }),
-      });
-      await loadRecentChats();
-    } catch (error) {
-      console.error(error);
-    }
+        await fetch(`${API}/chat/sessions/${sessionId}/messages`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role,
+            content,
+            metadata: meta || null,
+          }),
+        });
+        await loadRecentChats();
+      } catch (error) {
+        console.error("Failed to save message:", error);
+      }
+    });
   };
 
   const addMessage = (role, content, meta) => {
