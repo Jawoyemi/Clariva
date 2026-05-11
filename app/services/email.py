@@ -52,14 +52,11 @@ def send_welcome_email(email: str, name: str):
                 "html": html_content,
             }
             logger.info("Attempting to send welcome email to %s via Resend...", email)
-            print(f"DEBUG: Attempting to send welcome email to {email}")
             response = resend.Emails.send(params)
             logger.info("Welcome email sent successfully to %s. Response: %s", email, response)
-            print(f"DEBUG: Email sent! Response: {response}")
             return
         except Exception as e:
             logger.error("CRITICAL: Failed to send welcome email to %s via Resend: %s", email, str(e))
-            print(f"DEBUG ERROR: {str(e)}")
             
 
     if settings.SMTP_PASSWORD:
@@ -96,14 +93,11 @@ def send_verification_email(email: str, name: str, code: str):
                 "html": html_content,
             }
             logger.info("Attempting to send verification email to %s via Resend...", email)
-            print(f"DEBUG: Attempting to send verification email to {email} with code {code}")
             response = resend.Emails.send(params)
             logger.info("Verification email sent successfully to %s. Response: %s", email, response)
-            print(f"DEBUG: Email sent! Response: {response}")
             return
         except Exception as e:
             logger.error("CRITICAL: Failed to send verification email to %s via Resend: %s", email, str(e))
-            print(f"DEBUG ERROR: {str(e)}")
 
     if settings.SMTP_PASSWORD:
         try:

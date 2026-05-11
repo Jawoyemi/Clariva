@@ -3074,3 +3074,14 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: 8px;
   }
 }
+
+/* Final Mobile Fixes */
+@media (max-width: 768px) {
+  .sidebar-header {
+    padding: 16px 20px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+}
