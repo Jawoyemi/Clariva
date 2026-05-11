@@ -50,5 +50,7 @@ def verify_token(token):
         return None
 
 def generate_verification_code(length: int = 6) -> str:
-    characters = string.ascii_uppercase + string.digits
-    return ''.join(random.choice(characters) for _ in range(length))
+    import secrets
+    import string
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))

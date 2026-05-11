@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.database import get_db
 from app.core.auth import oauth
 from app.core.security import (
@@ -130,7 +130,7 @@ async def register(
         display_name=body.name.strip(),
         hashed_password=pwd_context.hash(body.password),
         verification_code=verification_code,
-        verification_code_expires_at=datetime.utcnow() + timedelta(minutes=15)
+        verification_code_expires_at=datetime.now(timezone.utc) + timedelta(minutes=15)
     )
     db.add(user)
     db.commit()
@@ -283,7 +283,7 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
     if created_new_user:
         verification_code = generate_verification_code()
         user.verification_code = verification_code
-        user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
+        user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
         db.commit()
         background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)
 
@@ -443,7 +443,7 @@ async def verify_email(
             detail="Invalid verification code"
         )
 
-    if user.verification_code_expires_at < datetime.utcnow():
+    if user.verification_code_expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Verification code has expired"
@@ -470,7 +470,7 @@ async def resend_verification(
 
     verification_code = generate_verification_code()
     user.verification_code = verification_code
-    user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
+    user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     db.commit()
 
     background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)

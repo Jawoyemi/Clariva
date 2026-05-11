@@ -127,6 +127,16 @@ const VerifyEmail = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+      navigate('/login'); // Redirect anyway
+    }
+  };
+
   return (
     <div className="auth-page-container">
       <div className="auth-info-side">
@@ -213,9 +223,22 @@ const VerifyEmail = () => {
                 {resendTimer > 0 ? `Resend in ${resendTimer}s` : resending ? 'Sending...' : 'Resend Code'}
               </button>
             </p>
-            <Link to="/login" className="back-link" style={{ display: 'block', marginTop: '1rem', color: '#9ca3af', textDecoration: 'none', fontSize: '0.9rem' }}>
+            <button 
+              onClick={handleLogout} 
+              className="back-link" 
+              style={{ 
+                display: 'block', 
+                width: '100%',
+                marginTop: '1.5rem', 
+                color: '#9ca3af', 
+                background: 'none',
+                border: 'none',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
               Back to Sign In
-            </Link>
+            </button>
           </div>
         </div>
       </div>
