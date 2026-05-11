@@ -14,6 +14,7 @@ from app.services.ai import (
     generate_chat_reply,
     parse_json_response,
 )
+from app.services.credits import charge_credits, GENERATION_COSTS
 import json
 import re
 
@@ -270,8 +271,10 @@ async def chat_reply(
     body: ChatRequest,
     request: Request,
     db=Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
     _=Depends(limit_chat_general),
 ):
+    charge_credits(owner, db, cost=GENERATION_COSTS["message"], description="General chat message")
     text = body.message.strip()
     if not text:
         raise HTTPException(
@@ -292,7 +295,9 @@ async def chat_message(
     body: ChatRequest,
     request: Request,
     db=Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
 ):
+    charge_credits(owner, db, cost=GENERATION_COSTS["message"], description="AI intake/chat message")
     text = body.message.strip()
     if not text:
         raise HTTPException(

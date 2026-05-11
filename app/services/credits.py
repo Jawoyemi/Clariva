@@ -24,6 +24,7 @@ GENERATION_COSTS = {
     "sow": 5,
     "prd": 5,
     "both": 8,
+    "message": 1,
 }
 
 
@@ -63,9 +64,6 @@ def apply_refill(account, db: Session) -> None:
     account.credits_max = PLAN_MAX_CREDITS.get(plan, account.credits_max)
     last_refill_at = _ensure_aware(account.last_refill_at)
     now = _now()
-    
-    # Handle clock skew: if last_refill_at is in the future relative to now, 
-    # reset it to now to avoid negative or stuck countdowns.
     if last_refill_at > now:
         account.last_refill_at = now
         db.commit()
@@ -100,7 +98,6 @@ def next_refill_at(account) -> datetime | None:
     if not rate:
         return None
     next_time = _ensure_aware(account.last_refill_at) + timedelta(hours=rate["interval_hours"])
-    # Ensure we don't return a time in the past if apply_refill hasn't caught up
     return max(next_time, _now()) if account.credits_balance < account.credits_max else None
 
 
