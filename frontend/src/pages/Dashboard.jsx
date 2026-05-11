@@ -3,6 +3,7 @@ import { useLoaderData, Link, useParams, useNavigate } from 'react-router-dom';
 import '../index.css';
 import Logo from '../Logo';
 import LoginModal from '../LoginModal';
+import CreditsModal from '../CreditsModal';
 
 const SUGGESTION_GROUPS = [
   [
@@ -161,6 +162,7 @@ const Dashboard = () => {
   const [refillCountdown, setRefillCountdown] = useState(null);
   const refillTimerRef = useRef(null);
   const textareaRef = useRef(null);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   const userName = userLoadData?.name || 'Guest';
   const userEmail = userLoadData?.email || '';
@@ -307,10 +309,8 @@ const Dashboard = () => {
   const formatApiError = (payload, fallback) => {
     const detail = payload?.detail;
     if (detail?.error === 'insufficient_credits') {
-      const refill = detail.next_refill_at
-        ? ` Next refill: ${new Date(detail.next_refill_at).toLocaleString()}.`
-        : '';
-      return `Insufficient credits. You have ${detail.balance}, but this needs ${detail.required}.${refill}`;
+      setShowCreditsModal(true);
+      return `You've run out of credits.`;
     }
     if (typeof detail === 'string') return detail;
     return fallback;
@@ -1445,6 +1445,15 @@ const Dashboard = () => {
       </main>
 
       <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
+      <CreditsModal 
+        isOpen={showCreditsModal} 
+        onClose={() => setShowCreditsModal(false)}
+        balance={creditBalance.credits_balance}
+        max={creditBalance.credits_max}
+        nextRefill={creditBalance.next_refill_at}
+        refillCountdown={refillCountdown}
+        plan={creditBalance.plan}
+      />
       {showSettings && settingsData && (
         <div className="modal-overlay">
           <div className="settings-modal">
