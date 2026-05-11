@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLoaderData, Link } from 'react-router-dom';
+import { useLoaderData, Link, useParams, useNavigate } from 'react-router-dom';
 import '../index.css';
 import Logo from '../Logo';
 import LoginModal from '../LoginModal';
@@ -139,6 +139,8 @@ const Dashboard = () => {
   const [recentDocuments, setRecentDocuments] = useState([]);
   const [currentDocument, setCurrentDocument] = useState(null);
   const [recentChats, setRecentChats] = useState([]);
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
   const [currentChatId, setCurrentChatId] = useState(null);
   const [creditBalance, setCreditBalance] = useState({
     plan: userLoadData?.plan || 'guest',
@@ -257,6 +259,7 @@ const Dashboard = () => {
     const session = await res.json();
     currentChatIdRef.current = session.id;
     setCurrentChatId(session.id);
+    navigate(`/dashboard/${session.id}`);
     await loadRecentChats();
     return session.id;
   };
@@ -542,6 +545,9 @@ const Dashboard = () => {
   const loadChatSession = async (sessionId) => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
     try {
+      if (sessionId !== currentChatIdRef.current) {
+        navigate(`/dashboard/${sessionId}`);
+      }
       const res = await fetch(`${API}/chat/sessions/${sessionId}`, {
         credentials: 'include',
       });
@@ -826,6 +832,7 @@ const Dashboard = () => {
       { document: updatedDocument }
     );
     await loadRecentDocuments();
+    await loadCreditBalance();
   };
 
   const handleSend = async () => {
@@ -890,6 +897,7 @@ const Dashboard = () => {
 
         if (payload.intent === 'general_chat') {
           addMessage('assistant', payload.reply || 'I\'m here and ready to help.');
+          loadCreditBalance(); // Update credits
           requestInFlightRef.current = false;
           setLoading(false);
           return;
@@ -1028,6 +1036,8 @@ const Dashboard = () => {
       } catch (err) {
         setMessages((prev) => prev.filter((m) => !m.meta?.typing));
         addMessage('error', `❌ ${err.message}`);
+      } finally {
+        loadCreditBalance(); // Always update balance after a message attempt
       }
     }
     } finally {
@@ -1045,6 +1055,16 @@ const Dashboard = () => {
     loadRecentChats();
     loadCreditBalance();
   }, []);
+
+  // Sync state with URL sessionId
+  useEffect(() => {
+    if (sessionId && sessionId !== currentChatId) {
+      loadChatSession(sessionId);
+    } else if (!sessionId && currentChatId) {
+      // If user clears the URL but we have a chat open, maybe reset?
+      // For now, just keep it.
+    }
+  }, [sessionId]);
 
   // Auto-scroll to bottom when messages update
   useEffect(() => {

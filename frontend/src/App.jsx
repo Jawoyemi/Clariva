@@ -57,7 +57,7 @@ const router = createBrowserRouter([
     loader: landingLoader
   },
   {
-    path: "/dashboard",
+    path: "/dashboard/:sessionId?",
     element: <Dashboard />,
     loader: dashboardLoader
   },
