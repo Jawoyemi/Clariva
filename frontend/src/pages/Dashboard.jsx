@@ -1474,8 +1474,8 @@ const Dashboard = () => {
                 </div>
                 <p className="settings-credit-note">
                   Credits are automatically replenished based on your plan. 
-                  {settingsData.plan === 'pro' ? ' You are on the Pro plan (25 credits every 3h).' : 
-                   settingsData.plan === 'free' ? ' You are on the Free plan (10 credits every 6h).' : 
+                  {settingsData.plan === 'pro' ? ' You are on the Pro plan (25 credits every 2h).' : 
+                   settingsData.plan === 'free' ? ' You are on the Free plan (10 credits every 4h).' : 
                    ' Guest sessions receive 10 credits every 30m.'}
                 </p>
               </section>
