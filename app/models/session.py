@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
+from datetime import datetime, timezone
 
 class GuestSession(Base):
     __tablename__ = "guest_sessions"
@@ -13,5 +14,5 @@ class GuestSession(Base):
     converted = Column(Boolean, default=False)
     credits_balance = Column(Integer, nullable=False, default=10)
     credits_max = Column(Integer, nullable=False, default=10)
-    last_refill_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_refill_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

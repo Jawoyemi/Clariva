@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
+from datetime import datetime, timezone
 
 class User(Base):
     __tablename__ = "users"
@@ -23,7 +24,7 @@ class User(Base):
     plan = Column(String, nullable=False, default="free")
     credits_balance = Column(Integer, nullable=False, default=30)
     credits_max = Column(Integer, nullable=False, default=30)
-    last_refill_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_refill_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     is_active = Column(Boolean, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

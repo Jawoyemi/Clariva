@@ -10,8 +10,8 @@ from app.models.user import User
 
 REFILL_RATES = {
     "guest": {"amount": 10, "interval_hours": 0.5},
-    "free": {"amount": 10, "interval_hours": 6},
-    "pro": {"amount": 25, "interval_hours": 3},
+    "free": {"amount": 10, "interval_hours": 4},
+    "pro": {"amount": 25, "interval_hours": 2},
 }
 
 PLAN_MAX_CREDITS = {
@@ -62,7 +62,16 @@ def apply_refill(account, db: Session) -> None:
 
     account.credits_max = PLAN_MAX_CREDITS.get(plan, account.credits_max)
     last_refill_at = _ensure_aware(account.last_refill_at)
-    elapsed_hours = (_now() - last_refill_at).total_seconds() / 3600
+    now = _now()
+    
+    # Handle clock skew: if last_refill_at is in the future relative to now, 
+    # reset it to now to avoid negative or stuck countdowns.
+    if last_refill_at > now:
+        account.last_refill_at = now
+        db.commit()
+        return
+
+    elapsed_hours = (now - last_refill_at).total_seconds() / 3600
     periods = int(elapsed_hours / rate["interval_hours"])
 
     if periods <= 0:
@@ -90,9 +99,9 @@ def next_refill_at(account) -> datetime | None:
     rate = REFILL_RATES.get(plan)
     if not rate:
         return None
-    if account.credits_balance >= account.credits_max:
-        return None
-    return _ensure_aware(account.last_refill_at) + timedelta(hours=rate["interval_hours"])
+    next_time = _ensure_aware(account.last_refill_at) + timedelta(hours=rate["interval_hours"])
+    # Ensure we don't return a time in the past if apply_refill hasn't caught up
+    return max(next_time, _now()) if account.credits_balance < account.credits_max else None
 
 
 def _transaction_for_account(account, *, amount: int, transaction_type: str, description: str) -> CreditTransaction:
