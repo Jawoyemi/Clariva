@@ -602,7 +602,7 @@ const Dashboard = () => {
     setMessages((prev) => prev.filter((m) => !m.meta?.typing));
 
     if (!res.ok) {
-      throw new Error((await res.json()).detail || 'Failed to chat with Clariva');
+      throw new Error(formatApiError(await res.json(), 'Failed to chat with Clariva'));
     }
 
     const payload = await res.json();
@@ -817,7 +817,7 @@ const Dashboard = () => {
     setMessages((prev) => prev.filter((m) => !m.meta?.typing));
 
     if (!res.ok) {
-      throw new Error((await res.json()).detail || 'Failed to revise document');
+      throw new Error(formatApiError(await res.json(), 'Failed to revise document'));
     }
 
     const payload = await res.json();
@@ -888,7 +888,9 @@ const Dashboard = () => {
           setLoading(false);
           return;
         }
-        if (!res.ok) throw new Error((await res.json()).detail || 'Something went wrong');
+        if (!res.ok) {
+          throw new Error(formatApiError(await res.json(), 'Something went wrong'));
+        }
 
         const payload = await res.json();
 
