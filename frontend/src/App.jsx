@@ -14,7 +14,12 @@ const landingLoader = async () => {
   try {
     const response = await fetch(`${API}/auth/me`, { credentials: 'include' });
     if (response.ok) {
-      return redirect("/dashboard");
+      const user = await response.json();
+      if (user.is_guest || user.is_verified) {
+        return redirect("/dashboard");
+      }
+      // If logged in but not verified, stay on landing/login page
+      // so they can use the "Back to Sign In" (Logout) button if needed.
     }
   } catch (error) {
     console.error("Auth check failed:", error);
