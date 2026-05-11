@@ -346,6 +346,11 @@ const Dashboard = () => {
       if (!res.ok) return;
       const payload = await res.json();
       setCreditBalance(payload);
+      if (payload.next_refill_at) {
+        startRefillTimer(payload.next_refill_at);
+      } else {
+        stopRefillTimer();
+      }
     } catch (error) {
       console.error(error);
     }
