@@ -8,18 +8,26 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     create_guest_token,
-    verify_token
+    verify_token,
+    generate_verification_code
 )
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.models.session import GuestSession
-from app.schemas.auth import TokenResponse, RefreshTokenRequest, GuestTokenResponse, RegisterRequest, LoginRequest
+from app.schemas.auth import (
+    TokenResponse, 
+    RefreshTokenRequest, 
+    GuestTokenResponse, 
+    RegisterRequest, 
+    LoginRequest,
+    VerifyRequest
+)
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 from app.config import settings
 from app.services.credits import apply_refill, next_refill_at
-from app.services.email import send_welcome_email
+from app.services.email import send_welcome_email, send_verification_email
 from app.services.rate_limit import enforce_limit
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -65,6 +73,7 @@ async def get_me(request: Request, db = Depends(get_db)):
                     "next_refill_at": next_refill_at(user),
                     "default_output": user.default_output,
                     "preferred_tone": user.preferred_tone,
+                    "is_verified": user.is_verified,
                 }
 
     guest_token = request.cookies.get("guest_token")
@@ -114,17 +123,20 @@ async def register(
             detail="Password must be at least 8 characters"
         )
 
+    verification_code = generate_verification_code()
     user = User(
         email=email,
         name=body.name.strip(),
         display_name=body.name.strip(),
         hashed_password=pwd_context.hash(body.password),
+        verification_code=verification_code,
+        verification_code_expires_at=datetime.utcnow() + timedelta(minutes=15)
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    background_tasks.add_task(send_welcome_email, email=user.email, name=user.name)
+    background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -269,7 +281,11 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
             user = db.query(User).filter(func.lower(User.email) == email).first()
 
     if created_new_user:
-        background_tasks.add_task(send_welcome_email, email=user.email, name=user.name)
+        verification_code = generate_verification_code()
+        user.verification_code = verification_code
+        user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
+        db.commit()
+        background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -409,3 +425,54 @@ async def logout(request: Request, db = Depends(get_db)):
     response.delete_cookie("refresh_token")
     response.delete_cookie("guest_token")
     return response
+
+
+@router.post("/verify")
+async def verify_email(
+    body: VerifyRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    if user.is_verified:
+        return {"status": "ok", "message": "Already verified"}
+
+    if not user.verification_code or user.verification_code != body.code.upper().strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code"
+        )
+
+    if user.verification_code_expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired"
+        )
+
+    user.is_verified = True
+    user.verification_code = None
+    user.verification_code_expires_at = None
+    db.commit()
+
+    background_tasks.add_task(send_welcome_email, email=user.email, name=user.name)
+
+    return {"status": "ok", "message": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    if user.is_verified:
+        return {"status": "ok", "message": "Already verified"}
+
+    verification_code = generate_verification_code()
+    user.verification_code = verification_code
+    user.verification_code_expires_at = datetime.utcnow() + timedelta(minutes=15)
+    db.commit()
+
+    background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)
+
+    return {"status": "ok", "message": "Verification code resent"}

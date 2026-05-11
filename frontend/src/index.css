@@ -3030,3 +3030,47 @@ h1, h2, h3, h4, h5, h6 {
 .google-auth-btn svg, .google-btn svg {
   flex-shrink: 0;
 }
+/* ============================================
+   VERIFICATION PAGE STYLES
+   ============================================ */
+.verification-code-inputs {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 32px 0;
+}
+
+.code-input {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-light);
+  transition: all 0.3s ease;
+}
+
+.code-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+  background: rgba(192, 158, 96, 0.08);
+  box-shadow: 0 0 0 4px rgba(192, 158, 96, 0.1);
+}
+
+.resend-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .verification-code-inputs {
+    gap: 8px;
+  }
+  
+  .code-input {
+    font-size: 20px;
+    border-radius: 8px;
+  }
+}

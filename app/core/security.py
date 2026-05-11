@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from app.config import settings
+import random
+import string
 
 def create_access_token(data):
     to_encode = data.copy()
@@ -46,3 +48,7 @@ def verify_token(token):
         return payload
     except JWTError:
         return None
+
+def generate_verification_code(length: int = 6) -> str:
+    characters = string.ascii_uppercase + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
