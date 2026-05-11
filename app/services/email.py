@@ -8,8 +8,11 @@ import resend
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-TEMPLATE_PATH = Path(__file__).parent.parent / "templates" / "email" / "welcome.html"
+# Get the absolute path to the app directory
+BASE_DIR = Path(__file__).resolve().parent.parent
+TEMPLATE_PATH = BASE_DIR / "templates" / "email" / "welcome.html"
 
 
 def _render_welcome_html(name: str) -> str:
@@ -21,7 +24,10 @@ def _render_welcome_html(name: str) -> str:
     return html.replace("{{name}}", name)
 
 
-VERIFY_TEMPLATE_PATH = Path(__file__).parent.parent / "templates" / "email" / "verify.html"
+    return html.replace("{{name}}", name)
+
+
+VERIFY_TEMPLATE_PATH = BASE_DIR / "templates" / "email" / "verify.html"
 
 
 def _render_verify_html(name: str, code: str) -> str:
@@ -45,11 +51,15 @@ def send_welcome_email(email: str, name: str):
                 "subject": "Welcome to Clariva!",
                 "html": html_content,
             }
-            resend.Emails.send(params)
-            logger.info("Welcome email sent to %s via Resend", email)
+            logger.info("Attempting to send welcome email to %s via Resend...", email)
+            print(f"DEBUG: Attempting to send welcome email to {email}")
+            response = resend.Emails.send(params)
+            logger.info("Welcome email sent successfully to %s. Response: %s", email, response)
+            print(f"DEBUG: Email sent! Response: {response}")
             return
         except Exception as e:
-            logger.error("Failed to send welcome email to %s via Resend: %s", email, str(e))
+            logger.error("CRITICAL: Failed to send welcome email to %s via Resend: %s", email, str(e))
+            print(f"DEBUG ERROR: {str(e)}")
             
 
     if settings.SMTP_PASSWORD:
@@ -85,11 +95,15 @@ def send_verification_email(email: str, name: str, code: str):
                 "subject": f"{code} is your Clariva verification code",
                 "html": html_content,
             }
-            resend.Emails.send(params)
-            logger.info("Verification email sent to %s via Resend", email)
+            logger.info("Attempting to send verification email to %s via Resend...", email)
+            print(f"DEBUG: Attempting to send verification email to {email} with code {code}")
+            response = resend.Emails.send(params)
+            logger.info("Verification email sent successfully to %s. Response: %s", email, response)
+            print(f"DEBUG: Email sent! Response: {response}")
             return
         except Exception as e:
-            logger.error("Failed to send verification email to %s via Resend: %s", email, str(e))
+            logger.error("CRITICAL: Failed to send verification email to %s via Resend: %s", email, str(e))
+            print(f"DEBUG ERROR: {str(e)}")
 
     if settings.SMTP_PASSWORD:
         try:

@@ -280,7 +280,8 @@ async def callback(request: Request, background_tasks: BackgroundTasks, db = Dep
             db.rollback()
             user = db.query(User).filter(func.lower(User.email) == email).first()
 
-    if created_new_user:
+    # Send verification code for new users OR existing unverified users
+    if created_new_user or not user.is_verified:
         verification_code = generate_verification_code()
         user.verification_code = verification_code
         user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
