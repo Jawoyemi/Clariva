@@ -20,14 +20,17 @@ from app.schemas.auth import (
     GuestTokenResponse, 
     RegisterRequest, 
     LoginRequest,
-    VerifyRequest
+    VerifyRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    UpdatePasswordRequest
 )
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 from app.config import settings
 from app.services.credits import apply_refill, next_refill_at
-from app.services.email import send_welcome_email, send_verification_email
+from app.services.email import send_welcome_email, send_verification_email, send_reset_password_email
 from app.services.rate_limit import enforce_limit
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -477,3 +480,72 @@ async def resend_verification(
     background_tasks.add_task(send_verification_email, email=user.email, name=user.name, code=verification_code)
 
     return {"status": "ok", "message": "Verification code resent"}
+
+
+from sqlalchemy.orm import Session
+
+@router.post("/forgot-password")
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
+):
+    email = body.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+    
+    if not user:
+        return {"message": "If an account exists with this email, a reset code has been sent."}
+
+    reset_code = generate_verification_code()
+    user.reset_password_code = reset_code
+    user.reset_password_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    db.commit()
+
+    if background_tasks:
+        background_tasks.add_task(send_reset_password_email, email=user.email, name=user.name, code=reset_code)
+    
+    return {"message": "If an account exists with this email, a reset code has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    body: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    email = body.email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+    
+    if not user or not user.reset_password_code:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+
+    if user.reset_password_code != body.code:
+        raise HTTPException(status_code=400, detail="Invalid reset code")
+
+    if datetime.now(timezone.utc) > user.reset_password_expires_at:
+        raise HTTPException(status_code=400, detail="Reset code has expired")
+
+    # Update password and clear reset fields
+    user.hashed_password = pwd_context.hash(body.new_password)
+    user.reset_password_code = None
+    user.reset_password_expires_at = None
+    db.commit()
+
+    return {"message": "Password has been reset successfully. You can now log in."}
+
+
+@router.patch("/security/password")
+async def update_password(
+    body: UpdatePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.hashed_password:
+        if not body.old_password:
+            raise HTTPException(status_code=400, detail="Current password is required")
+        if not pwd_context.verify(body.old_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Incorrect current password")
+            
+    current_user.hashed_password = pwd_context.hash(body.new_password)
+    db.commit()
+
+    return {"message": "Password updated successfully"}

@@ -163,6 +163,14 @@ const Dashboard = () => {
   const refillTimerRef = useRef(null);
   const textareaRef = useRef(null);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
+  
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [securityError, setSecurityError] = useState('');
+  const [securitySuccess, setSecuritySuccess] = useState('');
 
   const userName = userLoadData?.name || 'Guest';
   const userEmail = userLoadData?.email || '';
@@ -497,6 +505,45 @@ const Dashboard = () => {
       form.submit();
     } catch (error) {
       addMessage('error', `❌ ${error.message}`);
+    }
+  };
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setSecurityError('');
+    setSecuritySuccess('');
+    
+    if (passwordForm.newPassword.length < 8) {
+      setSecurityError('New password must be at least 8 characters');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setSecurityError('New passwords do not match');
+      return;
+    }
+    
+    setSettingsSaving(true);
+    try {
+      const res = await fetch(`${API}/auth/security/password`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          old_password: passwordForm.oldPassword || null,
+          new_password: passwordForm.newPassword
+        }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update password');
+      
+      setSecuritySuccess('Password updated successfully');
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      setSecurityError(error.message);
+    } finally {
+      setSettingsSaving(false);
     }
   };
 
@@ -1582,6 +1629,57 @@ const Dashboard = () => {
                 >
                   Save preferences
                 </button>
+              </section>
+
+              <section className="settings-section-card">
+                <h3>Security</h3>
+                <p className="settings-section-desc">
+                  {settingsData.hashed_password ? 'Update your account password.' : 'Set a password for your account to enable email/password login.'}
+                </p>
+                <div className="settings-password-form">
+                  {settingsData.hashed_password && (
+                    <label>
+                      Current Password
+                      <input 
+                        type="password" 
+                        value={passwordForm.oldPassword} 
+                        onChange={(e) => setPasswordForm({...passwordForm, oldPassword: e.target.value})}
+                        placeholder="••••••••"
+                      />
+                    </label>
+                  )}
+                  <label>
+                    New Password
+                    <input 
+                      type="password" 
+                      value={passwordForm.newPassword} 
+                      onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                      placeholder="Min. 8 characters"
+                    />
+                  </label>
+                  <label>
+                    Confirm New Password
+                    <input 
+                      type="password" 
+                      value={passwordForm.confirmPassword} 
+                      onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                      placeholder="••••••••"
+                    />
+                  </label>
+                  
+                  {securityError && <p className="settings-error-msg" style={{color: '#f87171', fontSize: '12px', marginTop: '8px'}}>{securityError}</p>}
+                  {securitySuccess && <p className="settings-success-msg" style={{color: '#4ade80', fontSize: '12px', marginTop: '8px'}}>{securitySuccess}</p>}
+                  
+                  <button 
+                    type="button" 
+                    className="settings-save-btn" 
+                    disabled={settingsSaving}
+                    onClick={handleUpdatePassword}
+                    style={{marginTop: '16px'}}
+                  >
+                    {settingsSaving ? 'Saving...' : (settingsData.hashed_password ? 'Update Password' : 'Set Password')}
+                  </button>
+                </div>
               </section>
 
               <section className="settings-section-card settings-danger-card">

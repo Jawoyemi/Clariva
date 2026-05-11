@@ -30,7 +30,17 @@ def _render_welcome_html(name: str) -> str:
 VERIFY_TEMPLATE_PATH = BASE_DIR / "templates" / "email" / "verify.html"
 
 
-def _render_verify_html(name: str, code: str) -> str:
+RESET_TEMPLATE_PATH = BASE_DIR / "templates" / "email" / "reset_password.html"
+
+def _render_reset_html(name: str, code: str) -> str:
+    if not RESET_TEMPLATE_PATH.exists():
+        logger.warning("Reset template not found at %s. Using fallback text.", RESET_TEMPLATE_PATH)
+        return f"<h1>Reset Your Password</h1><p>Hi {name}, your password reset code is: <strong>{code}</strong>. It expires in 15 minutes.</p>"
+    
+    html = RESET_TEMPLATE_PATH.read_text(encoding="utf-8")
+    return html.replace("{{name}}", name).replace("{{code}}", code)
+
+def send_welcome_email(email: str, name: str):
     if not VERIFY_TEMPLATE_PATH.exists():
         logger.warning("Verification template not found at %s. Using fallback text.", VERIFY_TEMPLATE_PATH)
         return f"<h1>Verify Your Email</h1><p>Hi {name}, your verification code is: <strong>{code}</strong>. It expires in 15 minutes.</p>"
@@ -118,3 +128,43 @@ def send_verification_email(email: str, name: str, code: str):
             logger.error("Failed to send verification email to %s via SMTP fallback: %s", email, str(e))
 
     logger.error("No valid email service (Resend or SMTP) configured for sending verification email to %s", email)
+
+
+def send_reset_password_email(email: str, name: str, code: str):
+    html_content = _render_reset_html(name, code)
+
+    if settings.RESEND_API_KEY:
+        try:
+            resend.api_key = settings.RESEND_API_KEY
+            params = {
+                "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>",
+                "to": [email],
+                "subject": f"{code} is your Clariva password reset code",
+                "html": html_content,
+            }
+            logger.info("Attempting to send reset email to %s via Resend...", email)
+            response = resend.Emails.send(params)
+            logger.info("Reset email sent successfully to %s. Response: %s", email, response)
+            return
+        except Exception as e:
+            logger.error("CRITICAL: Failed to send reset email to %s via Resend: %s", email, str(e))
+
+    if settings.SMTP_PASSWORD:
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>"
+            msg["To"] = email
+            msg["Subject"] = f"{code} is your Clariva password reset code"
+            msg.attach(MIMEText(html_content, "html"))
+
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.send_message(msg)
+                
+            logger.info("Reset email sent to %s via SMTP (Fallback)", email)
+            return
+        except Exception as e:
+            logger.error("Failed to send reset email to %s via SMTP fallback: %s", email, str(e))
+
+    logger.error("No valid email service (Resend or SMTP) configured for sending reset email to %s", email)

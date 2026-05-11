@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -24,3 +25,15 @@ class LoginRequest(BaseModel):
 
 class VerifyRequest(BaseModel):
     code: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+class UpdatePasswordRequest(BaseModel):
+    old_password: Optional[str] = None
+    new_password: str

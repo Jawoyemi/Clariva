@@ -3,25 +3,42 @@ import React, { useState } from 'react';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const LoginModal = ({ isOpen, onClose }) => {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
+  const [mode, setMode] = useState('login'); // 'login', 'register', 'forgot', 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
-      const endpoint = mode === 'register' ? '/auth/register' : '/auth/login/email';
-      const body = mode === 'register'
-        ? { email, password, name }
-        : { email, password };
+      let endpoint = '';
+      let body = {};
+
+      if (mode === 'register') {
+        endpoint = '/auth/register';
+        body = { email, password, name };
+      } else if (mode === 'login') {
+        endpoint = '/auth/login/email';
+        body = { email, password };
+      } else if (mode === 'forgot') {
+        endpoint = '/auth/forgot-password';
+        body = { email };
+      } else if (mode === 'reset') {
+        endpoint = '/auth/reset-password';
+        body = { email, code: resetCode, new_password: newPassword };
+      }
 
       const res = await fetch(`${API}${endpoint}`, {
         method: 'POST',
@@ -30,16 +47,26 @@ const LoginModal = ({ isOpen, onClose }) => {
         body: JSON.stringify(body),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         setError(data.detail || 'Something went wrong');
         setLoading(false);
         return;
       }
 
-      window.location.href = '/dashboard';
+      if (mode === 'forgot') {
+        setSuccessMessage('Reset code sent to your email.');
+        setMode('reset');
+      } else if (mode === 'reset') {
+        setSuccessMessage('Password reset successfully. You can now log in.');
+        setMode('login');
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       setError('Network error. Please try again.');
+    } finally {
       setLoading(false);
     }
   };
@@ -61,12 +88,16 @@ const LoginModal = ({ isOpen, onClose }) => {
         
         <div className="modal-header">
           <h2 className="modal-title">
-            {mode === 'login' ? 'Welcome back' : 'Create your account'}
+            {mode === 'login' && 'Welcome back'}
+            {mode === 'register' && 'Create your account'}
+            {mode === 'forgot' && 'Forgot Password'}
+            {mode === 'reset' && 'Reset Password'}
           </h2>
           <p className="modal-subtitle">
-            {mode === 'login'
-              ? 'Sign in to continue to Clariva.'
-              : 'Get started with Clariva for free.'}
+            {mode === 'login' && 'Sign in to continue to Clariva.'}
+            {mode === 'register' && 'Get started with Clariva for free.'}
+            {mode === 'forgot' && 'Enter your email to receive a reset code.'}
+            {mode === 'reset' && 'Enter the code sent to your email and your new password.'}
           </p>
         </div>
 
@@ -88,42 +119,93 @@ const LoginModal = ({ isOpen, onClose }) => {
               </div>
             )}
 
-            <div className="form-group">
-              <label htmlFor="auth-email" className="form-label">Email</label>
-              <input
-                id="auth-email"
-                type="email"
-                className="form-input"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
+            {(mode === 'login' || mode === 'register' || mode === 'forgot' || mode === 'reset') && (
+              <div className="form-group">
+                <label htmlFor="auth-email" className="form-label">Email Address</label>
+                <input
+                  id="auth-email"
+                  type="email"
+                  className="form-input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={mode === 'reset'}
+                  autoComplete="email"
+                />
+              </div>
+            )}
 
-            <div className="form-group">
-              <label htmlFor="auth-password" className="form-label">Password</label>
-              <input
-                id="auth-password"
-                type="password"
-                className="form-input"
-                placeholder={mode === 'register' ? 'Min. 8 characters' : '••••••••'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={mode === 'register' ? 8 : undefined}
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-              />
-            </div>
+            {(mode === 'login' || mode === 'register') && (
+              <div className="form-group">
+                <div className="label-row">
+                  <label htmlFor="auth-password" className="form-label">Password</label>
+                  {mode === 'login' && (
+                    <button type="button" className="forgot-link-btn" onClick={() => setMode('forgot')}>
+                      Forgot?
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="auth-password"
+                  type="password"
+                  className="form-input"
+                  placeholder={mode === 'register' ? 'Min. 8 characters' : '••••••••'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={mode === 'register' ? 8 : undefined}
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                />
+              </div>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="reset-code" className="form-label">Reset Code</label>
+                  <input
+                    id="reset-code"
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter code"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="new-password" className="form-label">New Password</label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    className="form-input"
+                    placeholder="Min. 8 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={8}
+                  />
+                </div>
+              </>
+            )}
 
             {error && <p className="auth-error">{error}</p>}
+            {successMessage && <p className="auth-success">{successMessage}</p>}
 
             <button type="submit" className="btn-primary auth-submit" disabled={loading}>
-              {loading
-                ? (mode === 'login' ? 'Signing in...' : 'Signing up...')
-                : (mode === 'login' ? 'Sign in' : 'Create account')}
+              {loading ? 'Processing...' : (
+                mode === 'login' ? 'Sign in' : 
+                mode === 'register' ? 'Create account' :
+                mode === 'forgot' ? 'Send Reset Code' : 'Reset Password'
+              )}
             </button>
+            
+            {(mode === 'forgot' || mode === 'reset') && (
+              <button type="button" className="auth-back-btn" onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); }}>
+                Back to login
+              </button>
+            )}
           </form>
 
           <p className="auth-switch">
