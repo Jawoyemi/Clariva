@@ -24,9 +24,6 @@ def _render_welcome_html(name: str) -> str:
     return html.replace("{{name}}", name)
 
 
-    return html.replace("{{name}}", name)
-
-
 VERIFY_TEMPLATE_PATH = BASE_DIR / "templates" / "email" / "verify.html"
 
 
@@ -40,7 +37,7 @@ def _render_reset_html(name: str, code: str) -> str:
     html = RESET_TEMPLATE_PATH.read_text(encoding="utf-8")
     return html.replace("{{name}}", name).replace("{{code}}", code)
 
-def send_welcome_email(email: str, name: str):
+def _render_verify_html(name: str, code: str) -> str:
     if not VERIFY_TEMPLATE_PATH.exists():
         logger.warning("Verification template not found at %s. Using fallback text.", VERIFY_TEMPLATE_PATH)
         return f"<h1>Verify Your Email</h1><p>Hi {name}, your verification code is: <strong>{code}</strong>. It expires in 15 minutes.</p>"
