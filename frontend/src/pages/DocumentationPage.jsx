@@ -87,7 +87,27 @@ const DocumentationPage = () => {
         </section>
 
         <section>
-          <h2>8. Support</h2>
+          <h2>8. Frequently Asked Questions (FAQ)</h2>
+          <div className="faq-item">
+            <h3>How do I get more credits?</h3>
+            <p>Credits refill automatically based on your plan. If you need more credits immediately, consider upgrading to the Pro plan in your settings (coming soon).</p>
+          </div>
+          <div className="faq-item">
+            <h3>Can I download documents in PDF?</h3>
+            <p>Currently, Clariva exports to DOCX to allow for easy manual editing. You can easily save your DOCX as a PDF using any word processor.</p>
+          </div>
+          <div className="faq-item">
+            <h3>Is my data secure?</h3>
+            <p>Yes. We use industry-standard encryption and secure cloud storage. We do not share your documents or ideas with third parties beyond the AI models used for generation.</p>
+          </div>
+          <div className="faq-item">
+            <h3>What happens if I lose my guest session?</h3>
+            <p>Guest sessions are temporary. To ensure your work is saved, we recommend creating a free account before you start generating documents.</p>
+          </div>
+        </section>
+
+        <section>
+          <h2>9. Support</h2>
           <p>If you encounter any issues or have feedback, please reach out to our team:</p>
           <ul>
             <li><strong>Email:</strong> support@clarivaai.tech</li>
