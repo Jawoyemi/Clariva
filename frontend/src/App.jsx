@@ -6,6 +6,7 @@ import AuthPage from './pages/AuthPage';
 import VerifyEmail from './pages/VerifyEmail';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
+import DocumentationPage from './pages/DocumentationPage';
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
@@ -100,6 +101,10 @@ const router = createBrowserRouter([
   {
     path: "/terms",
     element: <TermsPage />
+  },
+  {
+    path: "/docs",
+    element: <DocumentationPage />
   }
 ]);
 

@@ -1737,7 +1737,7 @@ const Dashboard = () => {
               <section className="settings-section-card">
                 <h3>Help & Support</h3>
                 <div className="settings-support-links">
-                  <a href="#" className="settings-support-link">Documentation</a>
+                  <Link to="/docs" className="settings-support-link">Documentation</Link>
                   <a href="#" className="settings-support-link">Contact Support</a>
                   <a href="#" className="settings-support-link">Send Feedback</a>
                 </div>
