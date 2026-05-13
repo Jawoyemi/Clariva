@@ -96,7 +96,7 @@ def send_verification_email(email: str, name: str, code: str):
             params = {
                 "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>",
                 "to": [email],
-                "subject": f"{code} is your Clariva verification code",
+                "subject": "Your Clariva verification code",
                 "html": html_content,
             }
             logger.info("Attempting to send verification email to %s via Resend...", email)
@@ -111,7 +111,7 @@ def send_verification_email(email: str, name: str, code: str):
             msg = MIMEMultipart()
             msg["From"] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>"
             msg["To"] = email
-            msg["Subject"] = f"{code} is your Clariva verification code"
+            msg["Subject"] = "Your Clariva verification code"
             msg.attach(MIMEText(html_content, "html"))
 
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
@@ -136,7 +136,7 @@ def send_reset_password_email(email: str, name: str, code: str):
             params = {
                 "from": f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>",
                 "to": [email],
-                "subject": f"{code} is your Clariva password reset code",
+                "subject": "Your Clariva password reset code",
                 "html": html_content,
             }
             logger.info("Attempting to send reset email to %s via Resend...", email)
@@ -151,7 +151,7 @@ def send_reset_password_email(email: str, name: str, code: str):
             msg = MIMEMultipart()
             msg["From"] = f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM_EMAIL}>"
             msg["To"] = email
-            msg["Subject"] = f"{code} is your Clariva password reset code"
+            msg["Subject"] = "Your Clariva password reset code"
             msg.attach(MIMEText(html_content, "html"))
 
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:

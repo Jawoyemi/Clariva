@@ -28,8 +28,6 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     verification_code = Column(String, nullable=True)
     verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Password Reset
     reset_password_code = Column(String, nullable=True)
     reset_password_expires_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)
