@@ -1657,8 +1657,7 @@ const Dashboard = () => {
                     <>
                       <div className="composer-toolbar">
                         {activeDocuments.length > 1 && (
-                          <label className="composer-select-group">
-                            <span className="composer-select-label">Editing</span>
+                          <label className="composer-inline-select">
                             <select
                               className="composer-select"
                               value={currentDocument?.id || ''}
@@ -1672,12 +1671,11 @@ const Dashboard = () => {
                             </select>
                           </label>
                         )}
-                        <label className="composer-select-group">
-                          <span className="composer-select-label">Composer mode</span>
+                        <label className="composer-inline-select">
                           <select
-                            className="composer-select"
-                            value={composerMode}
-                            onChange={(e) => setComposerMode(e.target.value)}
+                              className="composer-select"
+                              value={composerMode}
+                              onChange={(e) => setComposerMode(e.target.value)}
                           >
                             <option value="edit">Edit mode</option>
                             <option value="chat">General chat</option>

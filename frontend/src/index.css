@@ -3250,35 +3250,30 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
-.composer-select-group {
-  display: grid;
-  gap: 6px;
-  min-width: 180px;
-}
-
-.composer-select-label {
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+.composer-inline-select {
+  display: inline-flex;
+  min-width: 0;
 }
 
 .composer-select {
   appearance: none;
-  min-height: 38px;
-  padding: 8px 36px 8px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 34px;
+  padding: 6px 34px 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    linear-gradient(45deg, transparent 50%, #94a3b8 50%) calc(100% - 18px) calc(50% - 2px) / 6px 6px no-repeat,
-    linear-gradient(135deg, #94a3b8 50%, transparent 50%) calc(100% - 13px) calc(50% - 2px) / 6px 6px no-repeat,
-    rgba(255, 255, 255, 0.03);
+    linear-gradient(45deg, transparent 50%, #94a3b8 50%) calc(100% - 17px) calc(50% - 2px) / 6px 6px no-repeat,
+    linear-gradient(135deg, #94a3b8 50%, transparent 50%) calc(100% - 12px) calc(50% - 2px) / 6px 6px no-repeat,
+    rgba(255, 255, 255, 0.02);
   color: #f8fafc;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1;
+  max-width: 260px;
 }
 
 .composer-select:focus {
@@ -3297,7 +3292,12 @@ h1, h2, h3, h4, h5, h6 {
     justify-self: stretch;
   }
 
-  .composer-select-group {
+  .composer-inline-select {
     min-width: 100%;
+  }
+
+  .composer-select {
+    width: 100%;
+    max-width: none;
   }
 }
