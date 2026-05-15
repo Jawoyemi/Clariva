@@ -3246,33 +3246,45 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-1px);
 }
 
-.document-target-switcher,
-.composer-target-bar,
-.composer-mode-bar {
+.composer-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
-.document-target-chip,
-.composer-mode-chip {
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+.composer-select-group {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
 }
 
-.document-target-chip.active,
-.composer-mode-chip.active {
-  background: rgba(192, 158, 96, 0.18);
-  border-color: rgba(192, 158, 96, 0.55);
+.composer-select-label {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.composer-select {
+  appearance: none;
+  min-height: 38px;
+  padding: 8px 36px 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(45deg, transparent 50%, #94a3b8 50%) calc(100% - 18px) calc(50% - 2px) / 6px 6px no-repeat,
+    linear-gradient(135deg, #94a3b8 50%, transparent 50%) calc(100% - 13px) calc(50% - 2px) / 6px 6px no-repeat,
+    rgba(255, 255, 255, 0.03);
   color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.composer-select:focus {
+  outline: none;
+  border-color: rgba(192, 158, 96, 0.55);
+  box-shadow: 0 0 0 1px rgba(192, 158, 96, 0.22);
 }
 
 @media (max-width: 900px) {
@@ -3283,5 +3295,9 @@ h1, h2, h3, h4, h5, h6 {
   .document-edit-submit {
     width: 100%;
     justify-self: stretch;
+  }
+
+  .composer-select-group {
+    min-width: 100%;
   }
 }

@@ -1554,18 +1554,20 @@ const Dashboard = () => {
                     <strong>{currentDocument.title}</strong>
                     <p>Keep chatting below, or send a direct edit instruction here for a faster revision pass.</p>
                     {activeDocuments.length > 1 && (
-                      <div className="document-target-switcher">
-                        {activeDocuments.map((document) => (
-                          <button
-                            key={document.id}
-                            type="button"
-                            className={`document-target-chip${currentDocument?.id === document.id ? ' active' : ''}`}
-                            onClick={() => setDocumentTarget(document.id)}
-                          >
-                            {document.type}
-                          </button>
-                        ))}
-                      </div>
+                      <label className="composer-select-group">
+                        <span className="composer-select-label">Document target</span>
+                        <select
+                          className="composer-select"
+                          value={currentDocument?.id || ''}
+                          onChange={(e) => setDocumentTarget(e.target.value)}
+                        >
+                          {activeDocuments.map((document) => (
+                            <option key={document.id} value={document.id}>
+                              {document.type} - {document.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     )}
                   </div>
                   <div className="document-edit-panel-controls">
@@ -1653,35 +1655,34 @@ const Dashboard = () => {
                 <div className="intake-container">
                   {phase === 'done' && currentDocument && (
                     <>
-                      {activeDocuments.length > 1 && (
-                        <div className="composer-target-bar">
-                          {activeDocuments.map((document) => (
-                            <button
-                              key={document.id}
-                              type="button"
-                              className={`document-target-chip${currentDocument?.id === document.id ? ' active' : ''}`}
-                              onClick={() => setDocumentTarget(document.id)}
+                      <div className="composer-toolbar">
+                        {activeDocuments.length > 1 && (
+                          <label className="composer-select-group">
+                            <span className="composer-select-label">Editing</span>
+                            <select
+                              className="composer-select"
+                              value={currentDocument?.id || ''}
+                              onChange={(e) => setDocumentTarget(e.target.value)}
                             >
-                              Edit {document.type}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="composer-mode-bar">
-                        <button
-                          type="button"
-                          className={`composer-mode-chip${composerMode === 'edit' ? ' active' : ''}`}
-                          onClick={() => setComposerMode('edit')}
-                        >
-                          Edit mode
-                        </button>
-                        <button
-                          type="button"
-                          className={`composer-mode-chip${composerMode === 'chat' ? ' active' : ''}`}
-                          onClick={() => setComposerMode('chat')}
-                        >
-                          General chat
-                        </button>
+                              {activeDocuments.map((document) => (
+                                <option key={document.id} value={document.id}>
+                                  {document.type} - {document.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <label className="composer-select-group">
+                          <span className="composer-select-label">Composer mode</span>
+                          <select
+                            className="composer-select"
+                            value={composerMode}
+                            onChange={(e) => setComposerMode(e.target.value)}
+                          >
+                            <option value="edit">Edit mode</option>
+                            <option value="chat">General chat</option>
+                          </select>
+                        </label>
                       </div>
                     </>
                   )}
