@@ -158,6 +158,7 @@ const Dashboard = () => {
   const [showIndividualDocs, setShowIndividualDocs] = useState(false);
   const [typingPlaceholder, setTypingPlaceholder] = useState('');
   const [documentEditValue, setDocumentEditValue] = useState('');
+  const [composerMode, setComposerMode] = useState('edit');
   const currentChatIdRef = useRef(null);
   const saveQueueRef = useRef(Promise.resolve());
   const requestInFlightRef = useRef(false);
@@ -561,6 +562,7 @@ const Dashboard = () => {
     setActiveDocuments([]);
     setCurrentDocument(null);
     setDocumentEditValue('');
+    setComposerMode('edit');
     currentChatIdRef.current = null;
     setCurrentChatId(null);
   };
@@ -571,9 +573,9 @@ const Dashboard = () => {
     setCurrentChatId(document.chat_session_id || null);
     setMessages([]);
     setActiveDocuments([document]);
-    setActiveDocuments([document]);
     setCurrentDocument(document);
     setDocumentEditValue('');
+    setComposerMode('edit');
     setPhase('done');
     setClarifyingQuestions([]);
     setClarifyingIndex(0);
@@ -636,6 +638,13 @@ const Dashboard = () => {
     return documents[documents.length - 1];
   };
 
+  const setDocumentTarget = (documentId) => {
+    const nextDocument = activeDocuments.find((doc) => doc.id === documentId);
+    if (!nextDocument) return;
+    setCurrentDocument(nextDocument);
+    setComposerMode('edit');
+  };
+
   const loadChatSession = async (sessionId, preferredDocumentId = null) => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
     try {
@@ -667,6 +676,7 @@ const Dashboard = () => {
       setActiveDocuments(documents);
       setCurrentDocument(defaultDocument);
       setDocumentEditValue('');
+      setComposerMode(defaultDocument ? 'edit' : 'chat');
       setPhase(defaultDocument ? 'done' : 'idle');
       setClarifyingQuestions([]);
       setClarifyingIndex(0);
@@ -799,6 +809,7 @@ const Dashboard = () => {
     setActiveDocuments([document]);
     setCurrentDocument(document);
     setDocumentEditValue('');
+    setComposerMode('edit');
     addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     await loadRecentDocuments();
     await loadCreditBalance();
@@ -856,6 +867,7 @@ const Dashboard = () => {
 
     setCurrentDocument(document);
     setDocumentEditValue('');
+    setComposerMode('edit');
     addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     await loadRecentDocuments();
     await loadCreditBalance();
@@ -917,6 +929,7 @@ const Dashboard = () => {
     setActiveDocuments(documents);
     setCurrentDocument(chooseDocumentTarget(documents, selectedDocType || '', documents[documents.length - 1]));
     setDocumentEditValue('');
+    setComposerMode('edit');
     documents.forEach((document) => {
       addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     });
@@ -990,6 +1003,22 @@ const Dashboard = () => {
     } finally {
       requestInFlightRef.current = false;
       setLoading(false);
+      loadCreditBalance();
+    }
+  };
+
+  const handleComposerSendInDoneState = async (text) => {
+    addMessage('user', text);
+    try {
+      if (composerMode === 'chat') {
+        await sendGeneralChat(text);
+      } else {
+        await reviseCurrentDocument(text, currentDocument);
+      }
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => !m.meta?.typing));
+      addMessage('error', `âŒ ${err.message}`);
+    } finally {
       loadCreditBalance();
     }
   };
@@ -1187,6 +1216,8 @@ const Dashboard = () => {
         addMessage('assistant', 'Please confirm: do you want a **SOW**, **PRD**, or **both**?');
       }
     } else if (phase === 'done') {
+      await handleComposerSendInDoneState(text);
+      return;
       addMessage('user', text);
       try {
         if ((currentDocument?.id || activeDocuments.length) && isLikelyRevisionInstruction(text)) {
@@ -1522,6 +1553,20 @@ const Dashboard = () => {
                     <span className="document-edit-panel-label">Active document</span>
                     <strong>{currentDocument.title}</strong>
                     <p>Keep chatting below, or send a direct edit instruction here for a faster revision pass.</p>
+                    {activeDocuments.length > 1 && (
+                      <div className="document-target-switcher">
+                        {activeDocuments.map((document) => (
+                          <button
+                            key={document.id}
+                            type="button"
+                            className={`document-target-chip${currentDocument?.id === document.id ? ' active' : ''}`}
+                            onClick={() => setDocumentTarget(document.id)}
+                          >
+                            {document.type}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="document-edit-panel-controls">
                     <textarea
@@ -1606,13 +1651,35 @@ const Dashboard = () => {
 
               <div className="intake-wrapper intake-wrapper-bottom">
                 <div className="intake-container">
+                  {phase === 'done' && currentDocument && (
+                    <div className="composer-mode-bar">
+                      <button
+                        type="button"
+                        className={`composer-mode-chip${composerMode === 'edit' ? ' active' : ''}`}
+                        onClick={() => setComposerMode('edit')}
+                      >
+                        Edit {currentDocument.type}
+                      </button>
+                      <button
+                        type="button"
+                        className={`composer-mode-chip${composerMode === 'chat' ? ' active' : ''}`}
+                        onClick={() => setComposerMode('chat')}
+                      >
+                        General chat
+                      </button>
+                    </div>
+                  )}
                   <textarea
                     ref={textareaRef}
                     className="intake-textarea"
                     placeholder={
                       phase === 'clarifying' ? 'Answer this question, or type "continue" to move on…'
                       : phase === 'choose_type' ? 'Type SOW, PRD, or both…'
-                      : (window.innerWidth < 768 ? 'Describe your idea...' : (typingPlaceholder || 'Ask Clariva something...'))
+                      : phase === 'done' && currentDocument
+                        ? (composerMode === 'edit'
+                          ? `Describe the change you want in ${currentDocument.title}...`
+                          : 'Ask Clariva something about this project...')
+                        : (window.innerWidth < 768 ? 'Describe your idea...' : (typingPlaceholder || 'Ask Clariva something...'))
                     }
                     rows={1}
                     value={inputValue}
