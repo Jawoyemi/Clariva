@@ -138,6 +138,7 @@ const Dashboard = () => {
   const [currentBrief, setCurrentBrief] = useState(null);
   const [clarifyingAnswers, setClarifyingAnswers] = useState([]);
   const [recentDocuments, setRecentDocuments] = useState([]);
+  const [activeDocuments, setActiveDocuments] = useState([]);
   const [currentDocument, setCurrentDocument] = useState(null);
   const [recentChats, setRecentChats] = useState([]);
   const { sessionId } = useParams();
@@ -557,6 +558,7 @@ const Dashboard = () => {
     setSelectedDocType(null);
     setCurrentBrief(null);
     setClarifyingAnswers([]);
+    setActiveDocuments([]);
     setCurrentDocument(null);
     setDocumentEditValue('');
     currentChatIdRef.current = null;
@@ -568,6 +570,8 @@ const Dashboard = () => {
     currentChatIdRef.current = document.chat_session_id || null;
     setCurrentChatId(document.chat_session_id || null);
     setMessages([]);
+    setActiveDocuments([document]);
+    setActiveDocuments([document]);
     setCurrentDocument(document);
     setDocumentEditValue('');
     setPhase('done');
@@ -597,7 +601,42 @@ const Dashboard = () => {
     }
   };
 
-  const loadChatSession = async (sessionId) => {
+  const getDocumentsFromMessages = (items) => {
+    const seen = new Map();
+    for (const item of items) {
+      const document = item?.meta?.document;
+      if (document?.id) {
+        seen.set(document.id, document);
+      }
+    }
+    return Array.from(seen.values());
+  };
+
+  const detectDocumentTypeFromText = (text) => {
+    const lc = String(text || '').toLowerCase();
+    if (lc.includes('sow') || lc.includes('statement of work')) return 'SOW';
+    if (lc.includes('prd') || lc.includes('product requirements')) return 'PRD';
+    return null;
+  };
+
+  const chooseDocumentTarget = (documents, text, fallbackDocument = null) => {
+    if (!Array.isArray(documents) || !documents.length) return fallbackDocument;
+
+    const requestedType = detectDocumentTypeFromText(text);
+    if (requestedType) {
+      const matched = documents.find((doc) => doc.type === requestedType);
+      if (matched) return matched;
+    }
+
+    if (fallbackDocument?.id) {
+      const exact = documents.find((doc) => doc.id === fallbackDocument.id);
+      if (exact) return exact;
+    }
+
+    return documents[documents.length - 1];
+  };
+
+  const loadChatSession = async (sessionId, preferredDocumentId = null) => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
     try {
       if (sessionId !== currentChatIdRef.current) {
@@ -615,14 +654,20 @@ const Dashboard = () => {
         content: msg.content,
         meta: msg.metadata || undefined,
       }));
+      const documents = getDocumentsFromMessages(loadedMessages);
       const latestDocumentMessage = [...loadedMessages].reverse().find((msg) => msg.meta?.document);
+      const preferredDocument = preferredDocumentId
+        ? documents.find((doc) => doc.id === preferredDocumentId) || null
+        : null;
+      const defaultDocument = preferredDocument || latestDocumentMessage?.meta?.document || null;
 
       currentChatIdRef.current = payload.id;
       setCurrentChatId(payload.id);
       setMessages(loadedMessages);
-      setCurrentDocument(latestDocumentMessage?.meta?.document || null);
+      setActiveDocuments(documents);
+      setCurrentDocument(defaultDocument);
       setDocumentEditValue('');
-      setPhase(latestDocumentMessage?.meta?.document ? 'done' : 'idle');
+      setPhase(defaultDocument ? 'done' : 'idle');
       setClarifyingQuestions([]);
       setClarifyingIndex(0);
       setSelectedDocType(null);
@@ -751,6 +796,7 @@ const Dashboard = () => {
       return;
     }
 
+    setActiveDocuments([document]);
     setCurrentDocument(document);
     setDocumentEditValue('');
     addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
@@ -868,7 +914,8 @@ const Dashboard = () => {
       return;
     }
 
-    setCurrentDocument(documents[documents.length - 1]);
+    setActiveDocuments(documents);
+    setCurrentDocument(chooseDocumentTarget(documents, selectedDocType || '', documents[documents.length - 1]));
     setDocumentEditValue('');
     documents.forEach((document) => {
       addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
@@ -877,15 +924,17 @@ const Dashboard = () => {
     await loadCreditBalance();
   };
 
-  const reviseCurrentDocument = async (instruction) => {
-    if (!currentDocument?.id) {
+  const reviseCurrentDocument = async (instruction, explicitDocument = null) => {
+    const targetDocument = chooseDocumentTarget(activeDocuments, instruction, explicitDocument || currentDocument);
+    if (!targetDocument?.id) {
       addMessage('assistant', 'I can make edits after a document has been generated.');
       return;
     }
 
-    addMessage('assistant', `Updating **${currentDocument.title}**…`, { typing: true });
+    setCurrentDocument(targetDocument);
+    addMessage('assistant', `Updating **${targetDocument.title}**…`, { typing: true });
 
-    const res = await fetch(`${API}/documents/${currentDocument.id}/edit`, {
+    const res = await fetch(`${API}/documents/${targetDocument.id}/edit`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -903,6 +952,16 @@ const Dashboard = () => {
     if (!updatedDocument) {
       throw new Error('The document was revised, but no download file was returned');
     }
+    setActiveDocuments((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      const index = next.findIndex((doc) => doc.id === updatedDocument.id);
+      if (index >= 0) {
+        next[index] = updatedDocument;
+      } else {
+        next.push(updatedDocument);
+      }
+      return next;
+    });
     setCurrentDocument(updatedDocument);
     setDocumentEditValue('');
     addMessage(
@@ -1130,7 +1189,7 @@ const Dashboard = () => {
     } else if (phase === 'done') {
       addMessage('user', text);
       try {
-        if (currentDocument?.id && isLikelyRevisionInstruction(text)) {
+        if ((currentDocument?.id || activeDocuments.length) && isLikelyRevisionInstruction(text)) {
           await reviseCurrentDocument(text);
         } else {
           await sendGeneralChat(text);
@@ -1281,7 +1340,7 @@ const Dashboard = () => {
                               download_url: `/documents/${doc.id}/download`,
                             };
                             if (loadedDocument.chat_session_id) {
-                              loadChatSession(loadedDocument.chat_session_id);
+                              loadChatSession(loadedDocument.chat_session_id, loadedDocument.id);
                             } else {
                               startDocumentChat(loadedDocument);
                             }
