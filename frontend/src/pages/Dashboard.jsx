@@ -1652,22 +1652,38 @@ const Dashboard = () => {
               <div className="intake-wrapper intake-wrapper-bottom">
                 <div className="intake-container">
                   {phase === 'done' && currentDocument && (
-                    <div className="composer-mode-bar">
-                      <button
-                        type="button"
-                        className={`composer-mode-chip${composerMode === 'edit' ? ' active' : ''}`}
-                        onClick={() => setComposerMode('edit')}
-                      >
-                        Edit {currentDocument.type}
-                      </button>
-                      <button
-                        type="button"
-                        className={`composer-mode-chip${composerMode === 'chat' ? ' active' : ''}`}
-                        onClick={() => setComposerMode('chat')}
-                      >
-                        General chat
-                      </button>
-                    </div>
+                    <>
+                      {activeDocuments.length > 1 && (
+                        <div className="composer-target-bar">
+                          {activeDocuments.map((document) => (
+                            <button
+                              key={document.id}
+                              type="button"
+                              className={`document-target-chip${currentDocument?.id === document.id ? ' active' : ''}`}
+                              onClick={() => setDocumentTarget(document.id)}
+                            >
+                              Edit {document.type}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="composer-mode-bar">
+                        <button
+                          type="button"
+                          className={`composer-mode-chip${composerMode === 'edit' ? ' active' : ''}`}
+                          onClick={() => setComposerMode('edit')}
+                        >
+                          Edit mode
+                        </button>
+                        <button
+                          type="button"
+                          className={`composer-mode-chip${composerMode === 'chat' ? ' active' : ''}`}
+                          onClick={() => setComposerMode('chat')}
+                        >
+                          General chat
+                        </button>
+                      </div>
+                    </>
                   )}
                   <textarea
                     ref={textareaRef}
