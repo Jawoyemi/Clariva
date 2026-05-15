@@ -515,8 +515,10 @@ async def download_document(
         return RedirectResponse(download_url)
 
     # Local storage: resolve the path and serve the file directly
-    from app.services.storage import _resolve_local_path
-    local_path = _resolve_local_path(document.docx_path)
+    local_path = Path(document.docx_path)
+    if not local_path.is_absolute():
+        from app.config import settings as app_settings
+        local_path = Path(app_settings.LOCAL_STORAGE_DIR) / document.docx_path
     if local_path.exists():
         return FileResponse(
             path=str(local_path),
