@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 from app.database import get_db
 from app.core.dependencies import get_current_user_or_guest
+from app.models.chat import ChatMessageRecord, ChatSession
 from app.models.document import Document, DocumentType
 from app.schemas.document import DocumentResponse
 from app.schemas.prompt import IntakeInput, ClarificationAnswers
@@ -78,6 +79,9 @@ def _document_payload(document: Document) -> dict:
         "id": str(document.id),
         "type": document.type.value if hasattr(document.type, "value") else document.type,
         "title": document.title,
+        "chat_session_id": str(document.chat_session_id) if document.chat_session_id else None,
+        "prd_content": document.prd_content,
+        "sow_content": document.sow_content,
         "created_at": document.created_at,
         "updated_at": document.updated_at,
         "docx_path": document.docx_path,
@@ -131,6 +135,66 @@ def _validate_generation_body(brief, answers, outline, outline_name: str) -> Non
         )
 
 
+def _owner_chat_filter(query, owner):
+    if owner["type"] == "user":
+        return query.filter(ChatSession.user_id == owner["data"].id)
+    return query.filter(ChatSession.guest_session_id == owner["data"].id)
+
+
+def _resolve_chat_session(db: Session, owner, chat_session_id: str | None) -> ChatSession | None:
+    if not chat_session_id:
+        return None
+
+    chat_session = (
+        _owner_chat_filter(db.query(ChatSession), owner)
+        .filter(ChatSession.id == chat_session_id)
+        .first()
+    )
+    if not chat_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat session not found",
+        )
+    return chat_session
+
+
+def _markdown_for_type(document: Document, fallback_markdown: str) -> str:
+    if document.type == DocumentType.SOW:
+        return (document.sow_content or fallback_markdown or "").strip()
+    if document.type == DocumentType.PRD:
+        return (document.prd_content or fallback_markdown or "").strip()
+    return (fallback_markdown or "").strip()
+
+
+def _set_document_markdown(document: Document, markdown: str) -> None:
+    cleaned = (markdown or "").strip()
+    document.content = cleaned
+    if document.type == DocumentType.SOW:
+        document.sow_content = cleaned
+    elif document.type == DocumentType.PRD:
+        document.prd_content = cleaned
+
+
+def _chat_history_text(db: Session, chat_session_id) -> str:
+    if not chat_session_id:
+        return "No linked chat history."
+
+    messages = (
+        db.query(ChatMessageRecord)
+        .filter(ChatMessageRecord.chat_session_id == chat_session_id)
+        .order_by(ChatMessageRecord.created_at.asc(), ChatMessageRecord.id.asc())
+        .all()
+    )
+    if not messages:
+        return "No linked chat history."
+
+    lines = []
+    for message in messages[-20:]:
+        role = "User" if message.role == "user" else "Assistant"
+        lines.append(f"{role}: {message.content.strip()}")
+    return "\n".join(lines)
+
+
 def _generate_sow_payload(
     *,
     db: Session,
@@ -138,6 +202,7 @@ def _generate_sow_payload(
     brief: dict,
     answers: list,
     sow_outline: list,
+    chat_session_id,
     uploaded_files: list[str],
 ) -> dict:
     brief_context = _brief_context(brief, owner)
@@ -192,6 +257,7 @@ def _generate_sow_payload(
         doc_type=DocumentType.SOW,
         title=title,
         markdown=sow_markdown.strip(),
+        chat_session_id=chat_session_id,
         uploaded_files=uploaded_files,
     )
 
@@ -210,6 +276,7 @@ def _generate_prd_payload(
     brief: dict,
     answers: list,
     prd_outline: list,
+    chat_session_id,
     uploaded_files: list[str],
 ) -> dict:
     brief_context = _brief_context(brief, owner)
@@ -263,6 +330,7 @@ def _generate_prd_payload(
         doc_type=DocumentType.PRD,
         title=title,
         markdown=prd_markdown.strip(),
+        chat_session_id=chat_session_id,
         uploaded_files=uploaded_files,
     )
 
@@ -281,14 +349,17 @@ def _store_generated_document(
     doc_type: DocumentType,
     title: str,
     markdown: str,
+    chat_session_id,
     uploaded_files: list[str],
 ) -> Document:
     document = Document(
         **_owner_fields(owner),
+        chat_session_id=chat_session_id,
         type=doc_type,
         title=title,
         content=markdown,
     )
+    _set_document_markdown(document, markdown)
     db.add(document)
     db.flush()
 
@@ -318,9 +389,10 @@ def _regenerate_document_file(*, db: Session, owner, document: Document) -> Docu
     previous_key = document.docx_path
     local_docx = None
     stored_key = None
+    markdown = _markdown_for_type(document, document.content)
     try:
         local_docx = render_docx_from_markdown(
-            markdown=document.content,
+            markdown=markdown,
             title=document.title,
             document_type=document.type.value,
         )
@@ -351,23 +423,31 @@ def _regenerate_document_file(*, db: Session, owner, document: Document) -> Docu
     return document
 
 
-REVISION_PROMPT = """
+EDIT_PROMPT = """
 You are Clariva, an expert product documentation editor.
 
-Revise the existing {document_type} using the user's instruction.
+Update the current {document_type} using the linked conversation history and the user's latest instruction.
 
 Rules:
-- Return the full revised document, not a summary.
-- Preserve strong document structure and professional formatting in Markdown.
+- Return ONLY the full revised {document_type} as markdown.
+- Do not return JSON.
+- Preserve a professional structure with headings, bullets, and clear sections.
 - Apply the user's requested edit directly.
-- Do not mention that you revised it.
+- Keep details that are still valid from the existing document and conversation history.
+- Do not mention that you revised the document.
 - Do not wrap the response in code fences.
 
-User instruction:
-{instruction}
+Conversation history:
+{conversation_history}
 
-Existing document:
-{existing_document}
+Current {document_type}:
+{current_document}
+
+Related context from the other document type, if any:
+{related_document}
+
+Latest user instruction:
+{instruction}
 """
 
 
@@ -439,14 +519,11 @@ async def download_document(
     return RedirectResponse(get_download_url(document.docx_path))
 
 
-@router.post("/{document_id}/revise")
-async def revise_document(
+async def _edit_document(
     document_id: str,
     body: dict,
-    request: Request,
-    db: Session = Depends(get_db),
-    owner=Depends(get_current_user_or_guest),
-    _=Depends(limit_document_revise),
+    db: Session,
+    owner,
 ):
     instruction = str(body.get("instruction") or "").strip()
     if len(instruction) < 3:
@@ -459,11 +536,20 @@ async def revise_document(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
+    current_markdown = _markdown_for_type(document, document.content)
+    related_document = "None"
+    if document.type == DocumentType.SOW and document.prd_content:
+        related_document = document.prd_content
+    elif document.type == DocumentType.PRD and document.sow_content:
+        related_document = document.sow_content
+
     revised_content = call_ai(
-        REVISION_PROMPT.format(
+        EDIT_PROMPT.format(
             document_type=document.type.value,
+            conversation_history=_chat_history_text(db, document.chat_session_id),
             instruction=instruction,
-            existing_document=document.content,
+            current_document=current_markdown,
+            related_document=related_document,
         )
     )
 
@@ -473,13 +559,37 @@ async def revise_document(
             detail="Failed to revise document",
         )
 
-    document.content = revised_content.strip()
+    _set_document_markdown(document, revised_content)
     document = _regenerate_document_file(db=db, owner=owner, document=document)
 
     return {
         "document": _document_payload(document),
         "message": f"Updated {document.type.value} document is ready.",
     }
+
+
+@router.post("/{document_id}/edit")
+async def edit_document(
+    document_id: str,
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_revise),
+):
+    return await _edit_document(document_id=document_id, body=body, db=db, owner=owner)
+
+
+@router.post("/{document_id}/revise")
+async def revise_document(
+    document_id: str,
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    owner=Depends(get_current_user_or_guest),
+    _=Depends(limit_document_revise),
+):
+    return await _edit_document(document_id=document_id, body=body, db=db, owner=owner)
 
 
 @router.post("/intake")
@@ -615,6 +725,7 @@ async def compile_sow(
     brief = body.get("brief")
     answers = body.get("answers", [])
     sow_outline = body.get("sow_outline", [])
+    chat_session = _resolve_chat_session(db, owner, body.get("chat_session_id"))
     _validate_generation_body(brief, answers, sow_outline, "sow_outline")
 
     cost = GENERATION_COSTS["sow"]
@@ -628,6 +739,7 @@ async def compile_sow(
             brief=brief,
             answers=answers,
             sow_outline=sow_outline,
+            chat_session_id=chat_session.id if chat_session else None,
             uploaded_files=uploaded_files,
         )
         db.commit()
@@ -661,6 +773,7 @@ async def compile_prd(
     brief = body.get("brief")
     answers = body.get("answers", [])
     prd_outline = body.get("prd_outline", [])
+    chat_session = _resolve_chat_session(db, owner, body.get("chat_session_id"))
     _validate_generation_body(brief, answers, prd_outline, "prd_outline")
 
     cost = GENERATION_COSTS["prd"]
@@ -674,6 +787,7 @@ async def compile_prd(
             brief=brief,
             answers=answers,
             prd_outline=prd_outline,
+            chat_session_id=chat_session.id if chat_session else None,
             uploaded_files=uploaded_files,
         )
         db.commit()
@@ -708,6 +822,7 @@ async def compile_both(
     answers = body.get("answers", [])
     sow_outline = body.get("sow_outline", [])
     prd_outline = body.get("prd_outline", [])
+    chat_session = _resolve_chat_session(db, owner, body.get("chat_session_id"))
 
     _validate_generation_body(brief, answers, sow_outline, "sow_outline")
     _validate_generation_body(brief, answers, prd_outline, "prd_outline")
@@ -723,6 +838,7 @@ async def compile_both(
             brief=brief,
             answers=answers,
             sow_outline=sow_outline,
+            chat_session_id=chat_session.id if chat_session else None,
             uploaded_files=uploaded_files,
         )
         prd_payload = _generate_prd_payload(
@@ -731,6 +847,7 @@ async def compile_both(
             brief=brief,
             answers=answers,
             prd_outline=prd_outline,
+            chat_session_id=chat_session.id if chat_session else None,
             uploaded_files=uploaded_files,
         )
         db.commit()

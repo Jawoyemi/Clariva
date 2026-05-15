@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.database import get_db
 from app.core.dependencies import get_current_user_or_guest
 from app.models.chat import ChatSession, ChatMessageRecord
@@ -259,6 +260,7 @@ async def save_chat_message(
     )
     if session.title == "New chat" and body.role == "user":
         session.title = _clean_title(body.content)[:60]
+    session.updated_at = datetime.utcnow()
 
     db.add(message)
     db.commit()

@@ -156,6 +156,7 @@ const Dashboard = () => {
   const [showIndividualChats, setShowIndividualChats] = useState(false);
   const [showIndividualDocs, setShowIndividualDocs] = useState(false);
   const [typingPlaceholder, setTypingPlaceholder] = useState('');
+  const [documentEditValue, setDocumentEditValue] = useState('');
   const currentChatIdRef = useRef(null);
   const saveQueueRef = useRef(Promise.resolve());
   const requestInFlightRef = useRef(false);
@@ -557,16 +558,18 @@ const Dashboard = () => {
     setCurrentBrief(null);
     setClarifyingAnswers([]);
     setCurrentDocument(null);
+    setDocumentEditValue('');
     currentChatIdRef.current = null;
     setCurrentChatId(null);
   };
 
   const startDocumentChat = (document) => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
-    currentChatIdRef.current = null;
-    setCurrentChatId(null);
+    currentChatIdRef.current = document.chat_session_id || null;
+    setCurrentChatId(document.chat_session_id || null);
     setMessages([]);
     setCurrentDocument(document);
+    setDocumentEditValue('');
     setPhase('done');
     setClarifyingQuestions([]);
     setClarifyingIndex(0);
@@ -618,6 +621,7 @@ const Dashboard = () => {
       setCurrentChatId(payload.id);
       setMessages(loadedMessages);
       setCurrentDocument(latestDocumentMessage?.meta?.document || null);
+      setDocumentEditValue('');
       setPhase(latestDocumentMessage?.meta?.document ? 'done' : 'idle');
       setClarifyingQuestions([]);
       setClarifyingIndex(0);
@@ -669,6 +673,16 @@ const Dashboard = () => {
     return null;
   };
 
+  const getBriefProductLabel = (briefData) => {
+    const productType = briefData?.product_type;
+    if (!productType) return 'New chat';
+    if (typeof productType === 'string') return cleanChatTitle(productType);
+    if (typeof productType === 'object' && productType.value) {
+      return cleanChatTitle(productType.value);
+    }
+    return 'New chat';
+  };
+
   const isDocTypeOnlyInput = (text) => {
     const cleaned = text.trim().toLowerCase().replace(/[.?!]/g, '');
     return ['prd', 'sow', 'both', 'sow and prd', 'prd and sow', 'product requirements document', 'statement of work'].includes(cleaned);
@@ -711,6 +725,8 @@ const Dashboard = () => {
       }
     }
 
+    const chatSessionId = await ensureChatSession(`${getBriefProductLabel(briefData)} SOW`.slice(0, 60));
+
     const compileRes = await fetch(`${API}/documents/sow/compile`, {
       method: 'POST',
       credentials: 'include',
@@ -719,6 +735,7 @@ const Dashboard = () => {
         brief: briefData,
         answers: Array.isArray(answersData) ? answersData : [],
         sow_outline: sowOutline,
+        chat_session_id: chatSessionId,
       }),
     });
 
@@ -735,6 +752,7 @@ const Dashboard = () => {
     }
 
     setCurrentDocument(document);
+    setDocumentEditValue('');
     addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     await loadRecentDocuments();
     await loadCreditBalance();
@@ -764,6 +782,8 @@ const Dashboard = () => {
       }
     }
 
+    const chatSessionId = await ensureChatSession(`${getBriefProductLabel(briefData)} PRD`.slice(0, 60));
+
     const compileRes = await fetch(`${API}/documents/prd/compile`, {
       method: 'POST',
       credentials: 'include',
@@ -772,6 +792,7 @@ const Dashboard = () => {
         brief: briefData,
         answers: Array.isArray(answersData) ? answersData : [],
         prd_outline: prdOutline,
+        chat_session_id: chatSessionId,
       }),
     });
 
@@ -788,6 +809,7 @@ const Dashboard = () => {
     }
 
     setCurrentDocument(document);
+    setDocumentEditValue('');
     addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     await loadRecentDocuments();
     await loadCreditBalance();
@@ -819,6 +841,8 @@ const Dashboard = () => {
       }
     }
 
+    const chatSessionId = await ensureChatSession(`${getBriefProductLabel(briefData)} docs`.slice(0, 60));
+
     const compileRes = await fetch(`${API}/documents/both/compile`, {
       method: 'POST',
       credentials: 'include',
@@ -828,6 +852,7 @@ const Dashboard = () => {
         answers: Array.isArray(answersData) ? answersData : [],
         sow_outline: sowOutline,
         prd_outline: prdOutline,
+        chat_session_id: chatSessionId,
       }),
     });
 
@@ -844,6 +869,7 @@ const Dashboard = () => {
     }
 
     setCurrentDocument(documents[documents.length - 1]);
+    setDocumentEditValue('');
     documents.forEach((document) => {
       addMessage('assistant', `Your ${document.type} is ready to download. You can keep chatting to request edits.`, { document });
     });
@@ -859,7 +885,7 @@ const Dashboard = () => {
 
     addMessage('assistant', `Updating **${currentDocument.title}**…`, { typing: true });
 
-    const res = await fetch(`${API}/documents/${currentDocument.id}/revise`, {
+    const res = await fetch(`${API}/documents/${currentDocument.id}/edit`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -878,6 +904,7 @@ const Dashboard = () => {
       throw new Error('The document was revised, but no download file was returned');
     }
     setCurrentDocument(updatedDocument);
+    setDocumentEditValue('');
     addMessage(
       'assistant',
       payload.message || `Updated ${updatedDocument.type} document is ready to download.`,
@@ -885,6 +912,27 @@ const Dashboard = () => {
     );
     await loadRecentDocuments();
     await loadCreditBalance();
+  };
+
+  const handleDocumentEditSubmit = async () => {
+    const instruction = documentEditValue.trim();
+    if (!instruction || loading || requestInFlightRef.current || !currentDocument?.id) return;
+
+    addMessage('user', instruction);
+    setDocumentEditValue('');
+    setLoading(true);
+    requestInFlightRef.current = true;
+
+    try {
+      await reviseCurrentDocument(instruction);
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => !m.meta?.typing));
+      addMessage('error', `âŒ ${err.message}`);
+    } finally {
+      requestInFlightRef.current = false;
+      setLoading(false);
+      loadCreditBalance();
+    }
   };
 
   const handleSend = async () => {
@@ -1232,7 +1280,11 @@ const Dashboard = () => {
                               ...doc,
                               download_url: `/documents/${doc.id}/download`,
                             };
-                            startDocumentChat(loadedDocument);
+                            if (loadedDocument.chat_session_id) {
+                              loadChatSession(loadedDocument.chat_session_id);
+                            } else {
+                              startDocumentChat(loadedDocument);
+                            }
                           }}
                           title={doc.title}
                         >
@@ -1405,6 +1457,39 @@ const Dashboard = () => {
           {/* CHAT STATE — messages fill top, input anchors bottom */}
           {!isEmpty && (
             <>
+              {currentDocument && (
+                <div className="document-edit-panel">
+                  <div className="document-edit-panel-copy">
+                    <span className="document-edit-panel-label">Active document</span>
+                    <strong>{currentDocument.title}</strong>
+                    <p>Keep chatting below, or send a direct edit instruction here for a faster revision pass.</p>
+                  </div>
+                  <div className="document-edit-panel-controls">
+                    <textarea
+                      className="document-edit-textarea"
+                      placeholder={`What should Clariva change in ${currentDocument.title}?`}
+                      rows={2}
+                      value={documentEditValue}
+                      onChange={(e) => setDocumentEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleDocumentEditSubmit();
+                        }
+                      }}
+                    ></textarea>
+                    <button
+                      type="button"
+                      className={`document-edit-submit${documentEditValue.trim() && !loading ? '' : ' submit-disabled'}`}
+                      disabled={!documentEditValue.trim() || loading}
+                      onClick={handleDocumentEditSubmit}
+                    >
+                      Update document
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="chat-messages">
                 {messages.map((msg) => (
                   <div key={msg.id} className={`chat-bubble chat-bubble-${msg.role}`}>

@@ -16,15 +16,18 @@ class Document(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     guest_session_id = Column(UUID(as_uuid=True), ForeignKey("guest_sessions.id"), nullable=True)
+    chat_session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=True)
     type = Column(Enum(DocumentType), nullable=False)
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
+    prd_content = Column(Text, nullable=True)
+    sow_content = Column(Text, nullable=True)
     pdf_path = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
     user = relationship("User", backref="documents")
     guest_session = relationship("GuestSession", backref="documents")
+    chat_session = relationship("ChatSession", backref="documents")
 
     @property
     def docx_path(self):

@@ -13,6 +13,9 @@ class DocumentResponse(BaseModel):
     type: DocumentType
     title: str
     content: str
+    chat_session_id: UUID | None = None
+    prd_content: str | None = None
+    sow_content: str | None = None
     docx_path: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
