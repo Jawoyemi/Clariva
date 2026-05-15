@@ -508,15 +508,26 @@ async def download_document(
     if not document.docx_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document file is not available")
 
-    local_path = Path(document.docx_path)
+    download_url = get_download_url(document.docx_path)
+
+    # R2 returns an http(s) URL — redirect the user there
+    if download_url.startswith("http"):
+        return RedirectResponse(download_url)
+
+    # Local storage: resolve the path and serve the file directly
+    from app.services.storage import _resolve_local_path
+    local_path = _resolve_local_path(document.docx_path)
     if local_path.exists():
         return FileResponse(
-            path=local_path,
+            path=str(local_path),
             filename=f"{document.title}.docx",
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
 
-    return RedirectResponse(get_download_url(document.docx_path))
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Document file not found. On ephemeral hosting (e.g. Render), files are lost on redeploy. Configure Cloudflare R2 for durable storage.",
+    )
 
 
 async def _edit_document(
