@@ -1,4 +1,5 @@
-from groq import Groq
+from groq import Groq, RateLimitError
+from fastapi import HTTPException, status
 from app.config import settings
 import json
 
@@ -51,11 +52,17 @@ IDENTITY_KEYWORDS = {
 }
 
 def call_ai(prompt):
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+    except RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
+        )
 
 
 def call_ai_messages(messages, system_prompt=None):
@@ -64,11 +71,17 @@ def call_ai_messages(messages, system_prompt=None):
         payload.append({"role": "system", "content": system_prompt})
     payload.extend(messages)
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=payload
-    )
-    return response.choices[0].message.content
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=payload
+        )
+        return response.choices[0].message.content
+    except RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
+        )
 
 
 def classify_intent(message, history=None):
