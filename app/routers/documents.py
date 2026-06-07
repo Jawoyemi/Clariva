@@ -166,6 +166,33 @@ def _markdown_for_type(document: Document, fallback_markdown: str) -> str:
     return (fallback_markdown or "").strip()
 
 
+def _validate_generated_markdown(markdown: str | None, *, doc_kind: str) -> str:
+    """
+    Validate that an LLM-generated document body is usable.
+
+    - Must be non-empty after stripping
+    - Must contain at least one markdown heading (common for both SOW/PRD compilers)
+    """
+    text = (markdown or "").strip()
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI did not return any {doc_kind} markdown content",
+        )
+
+    # Compile prompts are instructed to output Markdown with headings (#/##).
+    # Require at least one heading line to reduce chance of rendering junk/empty content.
+    has_heading = any(line.lstrip().startswith("#") for line in text.splitlines()[:200])
+    if not has_heading:
+        excerpt = text[:200].replace("\n", " ").strip()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI returned {doc_kind} markdown without headings; excerpt: '{excerpt}'",
+        )
+
+    return text
+
+
 def _set_document_markdown(document: Document, markdown: str) -> None:
     cleaned = (markdown or "").strip()
     document.content = cleaned
@@ -243,12 +270,8 @@ def _generate_sow_payload(
         timeline_plan=json.dumps(timeline_plan, indent=2),
     )
     sow_markdown = call_ai(compiler_prompt)
+    sow_markdown = _validate_generated_markdown(sow_markdown, doc_kind="SOW")
 
-    if not sow_markdown:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to compile SOW document"
-        )
 
     title = _document_title("SOW", brief)
     document = _store_generated_document(
@@ -316,12 +339,8 @@ def _generate_prd_payload(
         user_stories=json.dumps(user_stories, indent=2),
     )
     prd_markdown = call_ai(compiler_prompt)
+    prd_markdown = _validate_generated_markdown(prd_markdown, doc_kind="PRD")
 
-    if not prd_markdown:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to compile PRD document"
-        )
 
     title = _document_title("PRD", brief)
     document = _store_generated_document(
@@ -566,11 +585,7 @@ async def _edit_document(
         )
     )
 
-    if not revised_content:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to revise document",
-        )
+    revised_content = _validate_generated_markdown(revised_content, doc_kind=f"{document.type.value} revision")
 
     _set_document_markdown(document, revised_content)
     document = _regenerate_document_file(db=db, owner=owner, document=document)

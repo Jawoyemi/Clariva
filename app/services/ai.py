@@ -2,9 +2,11 @@ from groq import Groq, RateLimitError
 from fastapi import HTTPException, status
 from app.config import settings
 import json
+import re
 
 client = Groq(api_key=settings.GROQ_API_KEY)
 
+ALLOWED_INTENTS = {"general_chat", "document_generation"}
 
 INTENT_ROUTER_PROMPT = """
 You are an intent router for a product-document assistant.
@@ -51,20 +53,6 @@ IDENTITY_KEYWORDS = {
     "your role",
 }
 
-def call_ai(prompt):
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content
-    except RateLimitError:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
-        )
-
-
 def call_ai_messages(messages, system_prompt=None):
     payload = []
     if system_prompt:
@@ -82,6 +70,15 @@ def call_ai_messages(messages, system_prompt=None):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
         )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI service error: {exc}",
+        )
+
+
+def call_ai(prompt):
+    return call_ai_messages([{"role": "user", "content": prompt}])
 
 
 def classify_intent(message, history=None):
@@ -99,7 +96,13 @@ def classify_intent(message, history=None):
     raw = call_ai_messages(routing_messages, system_prompt=INTENT_ROUTER_PROMPT)
     parsed = parse_json_response(raw)
 
-    if parsed and parsed.get("intent") in {"general_chat", "document_generation"}:
+    if (
+        isinstance(parsed, dict)
+        and parsed.get("intent") in ALLOWED_INTENTS
+        and isinstance(parsed.get("confidence"), (int, float))
+        and 0.0 <= float(parsed["confidence"]) <= 1.0
+        and isinstance(parsed.get("reason"), str)
+    ):
         return parsed
 
     fallback = message.lower()
@@ -134,12 +137,35 @@ def generate_chat_reply(message, history=None):
     return call_ai_messages(messages, system_prompt=GENERAL_CHAT_SYSTEM_PROMPT)
 
 def parse_json_response(raw):
-    try:
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
-        return json.loads(clean.strip())
-    except Exception:
+    """Best-effort JSON parser for LLM outputs.
+
+    Supports:
+    - raw JSON
+    - ```json ... ``` fences
+    - leading/trailing junk by extracting the first JSON object/array
+    """
+    if raw is None:
         return None
+
+    text = str(raw).strip()
+    if not text:
+        return None
+
+    code_block = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    if code_block:
+        text = code_block.group(1).strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"[\{\[]", text):
+        try:
+            parsed, _ = decoder.raw_decode(text[match.start():])
+            return parsed
+        except json.JSONDecodeError:
+            continue
+
+    return None
