@@ -30,6 +30,9 @@ from app.prompts.prd import (
     PRD_COMPILER_PROMPT,
 )
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -302,7 +305,9 @@ def _generate_prd_payload(
     chat_session_id,
     uploaded_files: list[str],
 ) -> dict:
+    logger.info("_generate_prd_payload: starting PRD generation")
     brief_context = _brief_context(brief, owner)
+    logger.info("_generate_prd_payload: step 1/3 - generating feature requirements")
     features_prompt = PRD_FEATURES_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
@@ -312,11 +317,13 @@ def _generate_prd_payload(
     feature_requirements = parse_json_response(features_raw)
 
     if not feature_requirements:
+        logger.error("_generate_prd_payload: failed to parse feature requirements")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate PRD feature requirements"
         )
 
+    logger.info("_generate_prd_payload: step 2/3 - generating user stories")
     stories_prompt = PRD_USER_STORIES_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
@@ -326,11 +333,13 @@ def _generate_prd_payload(
     user_stories = parse_json_response(stories_raw)
 
     if not user_stories:
+        logger.error("_generate_prd_payload: failed to parse user stories")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate PRD user stories"
         )
 
+    logger.info("_generate_prd_payload: step 3/3 - compiling final markdown")
     compiler_prompt = PRD_COMPILER_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
@@ -340,7 +349,7 @@ def _generate_prd_payload(
     )
     prd_markdown = call_ai(compiler_prompt)
     prd_markdown = _validate_generated_markdown(prd_markdown, doc_kind="PRD")
-
+    logger.info("_generate_prd_payload: PRD generation complete")
 
     title = _document_title("PRD", brief)
     document = _store_generated_document(

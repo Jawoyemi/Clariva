@@ -2,7 +2,10 @@ from groq import Groq, RateLimitError
 from fastapi import HTTPException, status
 from app.config import settings
 import json
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 client = Groq(api_key=settings.GROQ_API_KEY)
 
@@ -59,18 +62,24 @@ def call_ai_messages(messages, system_prompt=None):
         payload.append({"role": "system", "content": system_prompt})
     payload.extend(messages)
 
+    logger.info("call_ai_messages: sending %d messages to model", len(payload))
     try:
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            messages=payload
+            messages=payload,
+            timeout=90,
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        logger.info("call_ai_messages: received %d chars", len(content or ""))
+        return content
     except RateLimitError:
+        logger.warning("call_ai_messages: rate limit hit")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
         )
     except Exception as exc:
+        logger.error("call_ai_messages: AI call failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI service error: {exc}",
