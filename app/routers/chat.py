@@ -285,7 +285,7 @@ async def chat_reply(
         )
 
     history = [{"role": item.role, "content": item.content} for item in body.history]
-    reply = generate_chat_reply(text, history=history)
+    reply = await generate_chat_reply(text, history=history)
     return {
         "intent": "general_chat",
         "reply": reply,
@@ -330,12 +330,12 @@ async def chat_message(
             },
         }
 
-    routing = classify_intent(text, history=history)
+    routing = await classify_intent(text, history=history)
     intent = routing.get("intent", "general_chat")
 
     if intent == "general_chat":
         enforce_limit(request, "chat_general")
-        reply = generate_chat_reply(text, history=history)
+        reply = await generate_chat_reply(text, history=history)
         return {
             "intent": "general_chat",
             "reply": reply,
@@ -348,12 +348,12 @@ async def chat_message(
     enforce_limit(request, "chat_generation")
 
     intake_prompt = INTAKE_PROMPT.format(idea=text)
-    intake_raw = call_ai(intake_prompt)
+    intake_raw = await call_ai(intake_prompt)
     brief = parse_json_response(intake_raw)
 
     if not brief:
         repair_prompt = INTAKE_JSON_REPAIR_PROMPT.format(raw=intake_raw)
-        repaired_raw = call_ai(repair_prompt)
+        repaired_raw = await call_ai(repair_prompt)
         brief = parse_json_response(repaired_raw)
 
     if not brief:
@@ -399,7 +399,7 @@ async def chat_message(
     clarify_prompt = CLARIFICATION_PROMPT.format(
         structured_brief=json.dumps(brief, indent=2)
     )
-    clarify_raw = call_ai(clarify_prompt)
+    clarify_raw = await call_ai(clarify_prompt)
 
     questions = []
     for line in clarify_raw.strip().split("\n"):

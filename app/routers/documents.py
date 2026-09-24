@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 from datetime import datetime
+import asyncio
 import os
 from app.database import get_db
 from app.core.dependencies import get_current_user_or_guest
@@ -225,7 +226,7 @@ def _chat_history_text(db: Session, chat_session_id) -> str:
     return "\n".join(lines)
 
 
-def _generate_sow_payload(
+async def _generate_sow_payload(
     *,
     db: Session,
     owner,
@@ -235,36 +236,42 @@ def _generate_sow_payload(
     chat_session_id,
     uploaded_files: list[str],
 ) -> dict:
+    logger.info("_generate_sow_payload: starting SOW generation")
     brief_context = _brief_context(brief, owner)
+    logger.info("_generate_sow_payload: step 1/3 - generating scope plan")
     scope_prompt = SOW_SCOPE_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
         sow_outline=json.dumps(sow_outline, indent=2),
     )
-    scope_raw = call_ai(scope_prompt)
+    scope_raw = await call_ai(scope_prompt)
     scope_plan = parse_json_response(scope_raw)
 
     if not scope_plan:
+        logger.error("_generate_sow_payload: failed to parse scope plan")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate SOW scope plan"
         )
 
+    logger.info("_generate_sow_payload: step 2/3 - generating timeline plan")
     timeline_prompt = SOW_TIMELINE_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
         sow_outline=json.dumps(sow_outline, indent=2),
         scope_plan=json.dumps(scope_plan, indent=2),
     )
-    timeline_raw = call_ai(timeline_prompt)
+    timeline_raw = await call_ai(timeline_prompt)
     timeline_plan = parse_json_response(timeline_raw)
 
     if not timeline_plan:
+        logger.error("_generate_sow_payload: failed to parse timeline plan")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate SOW timeline plan"
         )
 
+    logger.info("_generate_sow_payload: step 3/3 - compiling final SOW markdown")
     compiler_prompt = SOW_COMPILER_PROMPT.format(
         structured_brief=brief_context,
         user_answers=json.dumps(answers, indent=2),
@@ -272,12 +279,13 @@ def _generate_sow_payload(
         scope_plan=json.dumps(scope_plan, indent=2),
         timeline_plan=json.dumps(timeline_plan, indent=2),
     )
-    sow_markdown = call_ai(compiler_prompt)
+    sow_markdown = await call_ai(compiler_prompt)
     sow_markdown = _validate_generated_markdown(sow_markdown, doc_kind="SOW")
-
+    logger.info("_generate_sow_payload: SOW generation complete, storing document")
 
     title = _document_title("SOW", brief)
-    document = _store_generated_document(
+    document = await asyncio.to_thread(
+        _store_generated_document,
         db=db,
         owner=owner,
         doc_type=DocumentType.SOW,
@@ -295,7 +303,7 @@ def _generate_sow_payload(
     }
 
 
-def _generate_prd_payload(
+async def _generate_prd_payload(
     *,
     db: Session,
     owner,
@@ -313,7 +321,7 @@ def _generate_prd_payload(
         user_answers=json.dumps(answers, indent=2),
         prd_outline=json.dumps(prd_outline, indent=2),
     )
-    features_raw = call_ai(features_prompt)
+    features_raw = await call_ai(features_prompt)
     feature_requirements = parse_json_response(features_raw)
 
     if not feature_requirements:
@@ -329,7 +337,7 @@ def _generate_prd_payload(
         user_answers=json.dumps(answers, indent=2),
         feature_requirements=json.dumps(feature_requirements, indent=2),
     )
-    stories_raw = call_ai(stories_prompt)
+    stories_raw = await call_ai(stories_prompt)
     user_stories = parse_json_response(stories_raw)
 
     if not user_stories:
@@ -347,12 +355,13 @@ def _generate_prd_payload(
         feature_requirements=json.dumps(feature_requirements, indent=2),
         user_stories=json.dumps(user_stories, indent=2),
     )
-    prd_markdown = call_ai(compiler_prompt)
+    prd_markdown = await call_ai(compiler_prompt)
     prd_markdown = _validate_generated_markdown(prd_markdown, doc_kind="PRD")
-    logger.info("_generate_prd_payload: PRD generation complete")
+    logger.info("_generate_prd_payload: PRD generation complete, storing document")
 
     title = _document_title("PRD", brief)
-    document = _store_generated_document(
+    document = await asyncio.to_thread(
+        _store_generated_document,
         db=db,
         owner=owner,
         doc_type=DocumentType.PRD,
@@ -584,7 +593,7 @@ async def _edit_document(
     elif document.type == DocumentType.PRD and document.sow_content:
         related_document = document.sow_content
 
-    revised_content = call_ai(
+    revised_content = await call_ai(
         EDIT_PROMPT.format(
             document_type=document.type.value,
             conversation_history=_chat_history_text(db, document.chat_session_id),
@@ -597,7 +606,7 @@ async def _edit_document(
     revised_content = _validate_generated_markdown(revised_content, doc_kind=f"{document.type.value} revision")
 
     _set_document_markdown(document, revised_content)
-    document = _regenerate_document_file(db=db, owner=owner, document=document)
+    document = await asyncio.to_thread(_regenerate_document_file, db=db, owner=owner, document=document)
 
     return {
         "document": _document_payload(document),
@@ -643,7 +652,7 @@ async def intake(
         )
 
     prompt = INTAKE_PROMPT.format(idea=body.idea)
-    raw = call_ai(prompt)
+    raw = await call_ai(prompt)
     brief = parse_json_response(raw)
 
     if not brief:
@@ -673,7 +682,7 @@ async def clarify(
     prompt = CLARIFICATION_PROMPT.format(
         structured_brief=json.dumps(brief, indent=2)
     )
-    raw = call_ai(prompt)
+    raw = await call_ai(prompt)
 
     if not raw:
         raise HTTPException(
@@ -718,7 +727,7 @@ async def outline(
         user_answers=json.dumps(answers, indent=2)
     )
 
-    raw = call_ai(prompt)
+    raw = await call_ai(prompt)
 
     if not raw:
         raise HTTPException(
@@ -770,7 +779,7 @@ async def compile_sow(
     uploaded_files: list[str] = []
 
     try:
-        payload = _generate_sow_payload(
+        payload = await _generate_sow_payload(
             db=db,
             owner=owner,
             brief=brief,
@@ -781,12 +790,14 @@ async def compile_sow(
         )
         db.commit()
     except HTTPException as exc:
+        logger.error("compile_sow HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="SOW generation failed")
         raise
-    except Exception:
+    except Exception as exc:
+        logger.error("compile_sow unexpected error: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="SOW generation failed")
@@ -818,7 +829,7 @@ async def compile_prd(
     uploaded_files: list[str] = []
 
     try:
-        payload = _generate_prd_payload(
+        payload = await _generate_prd_payload(
             db=db,
             owner=owner,
             brief=brief,
@@ -829,12 +840,14 @@ async def compile_prd(
         )
         db.commit()
     except HTTPException as exc:
+        logger.error("compile_prd HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="PRD generation failed")
         raise
-    except Exception:
+    except Exception as exc:
+        logger.error("compile_prd unexpected error: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="PRD generation failed")
@@ -869,7 +882,7 @@ async def compile_both(
     uploaded_files: list[str] = []
 
     try:
-        sow_payload = _generate_sow_payload(
+        sow_payload = await _generate_sow_payload(
             db=db,
             owner=owner,
             brief=brief,
@@ -878,7 +891,7 @@ async def compile_both(
             chat_session_id=chat_session.id if chat_session else None,
             uploaded_files=uploaded_files,
         )
-        prd_payload = _generate_prd_payload(
+        prd_payload = await _generate_prd_payload(
             db=db,
             owner=owner,
             brief=brief,
@@ -889,12 +902,14 @@ async def compile_both(
         )
         db.commit()
     except HTTPException as exc:
+        logger.error("compile_both HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         if exc.status_code >= 500:
             refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")
         raise
-    except Exception:
+    except Exception as exc:
+        logger.error("compile_both unexpected error: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
         refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")

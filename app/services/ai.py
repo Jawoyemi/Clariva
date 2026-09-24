@@ -1,4 +1,4 @@
-from groq import Groq, RateLimitError
+from groq import AsyncGroq, RateLimitError
 from fastapi import HTTPException, status
 from app.config import settings
 import json
@@ -7,7 +7,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-client = Groq(api_key=settings.GROQ_API_KEY)
+client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
 ALLOWED_INTENTS = {"general_chat", "document_generation"}
 
@@ -56,7 +56,7 @@ IDENTITY_KEYWORDS = {
     "your role",
 }
 
-def call_ai_messages(messages, system_prompt=None):
+async def call_ai_messages(messages, system_prompt=None):
     payload = []
     if system_prompt:
         payload.append({"role": "system", "content": system_prompt})
@@ -64,7 +64,7 @@ def call_ai_messages(messages, system_prompt=None):
 
     logger.info("call_ai_messages: sending %d messages to model", len(payload))
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=payload,
             timeout=90,
@@ -86,11 +86,11 @@ def call_ai_messages(messages, system_prompt=None):
         )
 
 
-def call_ai(prompt):
-    return call_ai_messages([{"role": "user", "content": prompt}])
+async def call_ai(prompt):
+    return await call_ai_messages([{"role": "user", "content": prompt}])
 
 
-def classify_intent(message, history=None):
+async def classify_intent(message, history=None):
     history = history or []
     routing_messages = []
 
@@ -102,7 +102,7 @@ def classify_intent(message, history=None):
 
     routing_messages.append({"role": "user", "content": message})
 
-    raw = call_ai_messages(routing_messages, system_prompt=INTENT_ROUTER_PROMPT)
+    raw = await call_ai_messages(routing_messages, system_prompt=INTENT_ROUTER_PROMPT)
     parsed = parse_json_response(raw)
 
     if (
@@ -127,7 +127,7 @@ def classify_intent(message, history=None):
     }
 
 
-def generate_chat_reply(message, history=None):
+async def generate_chat_reply(message, history=None):
     history = history or []
     lowered = message.lower().strip()
     if any(keyword in lowered for keyword in IDENTITY_KEYWORDS):
@@ -143,7 +143,7 @@ def generate_chat_reply(message, history=None):
 
     messages.append({"role": "user", "content": message})
 
-    return call_ai_messages(messages, system_prompt=GENERAL_CHAT_SYSTEM_PROMPT)
+    return await call_ai_messages(messages, system_prompt=GENERAL_CHAT_SYSTEM_PROMPT)
 
 def parse_json_response(raw):
     """Best-effort JSON parser for LLM outputs.
