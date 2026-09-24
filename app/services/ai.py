@@ -61,7 +61,7 @@ def call_ai_messages(messages, system_prompt=None):
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=payload
         )
         return response.choices[0].message.content
