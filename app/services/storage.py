@@ -85,4 +85,5 @@ def get_download_url(storage_key: str, expires_in: int = 900) -> str:
         )
 
     path = _resolve_local_path(storage_key)
-    return f"/documents/files/{quote(str(path).replace('\\', '/'))}"
+    normalized = str(path).replace("\\", "/")
+    return f"/documents/files/{quote(normalized)}"
