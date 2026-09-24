@@ -29,6 +29,21 @@ def _r2_client():
     )
 
 
+def _resolve_local_path(storage_key: str) -> Path:
+    path = Path(storage_key)
+    if path.is_absolute():
+        return path
+
+    local_root = Path(settings.LOCAL_STORAGE_DIR)
+    normalized_storage_key = str(path).replace("\\", "/")
+    normalized_local_root = str(local_root).replace("\\", "/").rstrip("/")
+
+    if normalized_storage_key == normalized_local_root or normalized_storage_key.startswith(f"{normalized_local_root}/"):
+        return Path(normalized_storage_key)
+
+    return local_root / path
+
+
 def upload_file(local_path: str, storage_key: str, content_type: str) -> str:
     if _using_r2():
         _r2_client().upload_file(
@@ -53,9 +68,7 @@ def delete_file(storage_key: str) -> None:
         _r2_client().delete_object(Bucket=settings.R2_BUCKET_NAME, Key=storage_key)
         return
 
-    path = Path(storage_key)
-    if not path.is_absolute():
-        path = Path(settings.LOCAL_STORAGE_DIR) / storage_key
+    path = _resolve_local_path(storage_key)
     if path.exists():
         path.unlink()
 
@@ -71,8 +84,5 @@ def get_download_url(storage_key: str, expires_in: int = 900) -> str:
             ExpiresIn=expires_in,
         )
 
-    path = Path(storage_key)
-    if not path.is_absolute():
-        path = Path(settings.LOCAL_STORAGE_DIR) / storage_key
-    normalized_path = str(path).replace("\\", "/")
-    return f"/documents/files/{quote(normalized_path)}"
+    path = _resolve_local_path(storage_key)
+    return f"/documents/files/{quote(str(path).replace('\\', '/'))}"
