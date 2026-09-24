@@ -793,8 +793,7 @@ async def compile_sow(
         logger.error("compile_sow HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
-        if exc.status_code >= 500:
-            refund_credits(owner, db, amount=cost, reason="SOW generation failed")
+        refund_credits(owner, db, amount=cost, reason="SOW generation failed")
         raise
     except Exception as exc:
         logger.error("compile_sow unexpected error: %s", exc, exc_info=True)
@@ -843,8 +842,7 @@ async def compile_prd(
         logger.error("compile_prd HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
-        if exc.status_code >= 500:
-            refund_credits(owner, db, amount=cost, reason="PRD generation failed")
+        refund_credits(owner, db, amount=cost, reason="PRD generation failed")
         raise
     except Exception as exc:
         logger.error("compile_prd unexpected error: %s", exc, exc_info=True)
@@ -905,8 +903,7 @@ async def compile_both(
         logger.error("compile_both HTTPException: %s", exc, exc_info=True)
         db.rollback()
         _cleanup_uploaded_files(uploaded_files)
-        if exc.status_code >= 500:
-            refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")
+        refund_credits(owner, db, amount=cost, reason="SOW + PRD bundle generation failed")
         raise
     except Exception as exc:
         logger.error("compile_both unexpected error: %s", exc, exc_info=True)

@@ -1,6 +1,7 @@
 from groq import AsyncGroq, RateLimitError
 from fastapi import HTTPException, status
 from app.config import settings
+import asyncio
 import json
 import logging
 import re
@@ -56,6 +57,24 @@ IDENTITY_KEYWORDS = {
     "your role",
 }
 
+_RETRY_AFTER_RE = re.compile(r"try again in ([\d.]+)s", re.IGNORECASE)
+_MAX_RETRIES = 3
+_DEFAULT_RETRY_WAIT = 20.0  # seconds to wait when we can't parse Groq's retry-after
+_MAX_RETRY_WAIT = 60.0
+
+
+def _parse_retry_after(exc: RateLimitError) -> float:
+    """Extract the suggested wait time (seconds) from a Groq RateLimitError message."""
+    try:
+        message = str(exc)
+        match = _RETRY_AFTER_RE.search(message)
+        if match:
+            return min(float(match.group(1)) + 1.0, _MAX_RETRY_WAIT)
+    except Exception:
+        pass
+    return _DEFAULT_RETRY_WAIT
+
+
 async def call_ai_messages(messages, system_prompt=None):
     payload = []
     if system_prompt:
@@ -63,27 +82,43 @@ async def call_ai_messages(messages, system_prompt=None):
     payload.extend(messages)
 
     logger.info("call_ai_messages: sending %d messages to model", len(payload))
-    try:
-        response = await client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=payload,
-            timeout=90,
-        )
-        content = response.choices[0].message.content
-        logger.info("call_ai_messages: received %d chars", len(content or ""))
-        return content
-    except RateLimitError:
-        logger.warning("call_ai_messages: rate limit hit")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
-        )
-    except Exception as exc:
-        logger.error("call_ai_messages: AI call failed: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI service error: {exc}",
-        )
+
+    last_exc: RateLimitError | None = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            response = await client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=payload,
+                timeout=90,
+            )
+            content = response.choices[0].message.content
+            logger.info("call_ai_messages: received %d chars", len(content or ""))
+            return content
+        except RateLimitError as exc:
+            last_exc = exc
+            wait = _parse_retry_after(exc)
+            if attempt < _MAX_RETRIES:
+                logger.warning(
+                    "call_ai_messages: rate limit hit (attempt %d/%d), retrying in %.1fs",
+                    attempt, _MAX_RETRIES, wait,
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.warning(
+                    "call_ai_messages: rate limit hit (attempt %d/%d), giving up",
+                    attempt, _MAX_RETRIES,
+                )
+        except Exception as exc:
+            logger.error("call_ai_messages: AI call failed: %s", exc, exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"AI service error: {exc}",
+            )
+
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Clariva is experiencing high demand right now. Please wait a few minutes and try again.",
+    )
 
 
 async def call_ai(prompt):
